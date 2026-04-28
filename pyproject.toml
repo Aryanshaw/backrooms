@@ -10,6 +10,12 @@ dependencies = [
     "asyncpg>=0.30",
     "psycopg>=3.0",
     "python-dotenv>=1.0",
+    "alembic>=1.0",
+]
+
+[dependency-groups]
+dev = [
+    "alembic>=1.0",
 ]
 
 [tool.uv]

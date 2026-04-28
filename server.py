@@ -8,6 +8,8 @@ from fastmcp.server.http import create_streamable_http_app
 
 from config.db import connect_db
 from config.logger import get_logger
+from tools.room_management.router import room_management_router as room_management_router
+
 
 logger = get_logger(__name__)
 
@@ -22,13 +24,7 @@ async def app_lifespan(app):
 
 
 mcp = FastMCP("MyServer", lifespan=app_lifespan)
-
-
-@mcp.tool()
-async def hello(name: str, ctx: Context) -> str:
-    """Greet a user by name."""
-    db = ctx.request_context.lifespan_state["db"]
-    return f"Hello, {name}!"
+mcp.mount(room_management_router)
 
 
 app = create_streamable_http_app(
