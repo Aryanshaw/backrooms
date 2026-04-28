@@ -1,0 +1,15 @@
+[project]
+name = "fastmcp-server"
+version = "0.1.0"
+description = "FastMCP server with streamable HTTP"
+requires-python = ">=3.11"
+dependencies = [
+    "fastmcp>=2.0",
+    "uvicorn>=0.30.0",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.30",
+    "psycopg>=3.0",
+    "python-dotenv>=1.0",
+]
+
+[tool.uv]
