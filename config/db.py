@@ -61,7 +61,6 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 @asynccontextmanager
 async def connect_db() -> AsyncGenerator[Database, None]:
-    logger.info("Starting database connection.")
     db = Database(DATABASE_URL)
     await db.init()
     try:

@@ -38,5 +38,4 @@ app = create_streamable_http_app(
 )
 
 if __name__ == "__main__":
-    logger.info("Starting FastMCP server with hot reload enabled.")
     uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)
