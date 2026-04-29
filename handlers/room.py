@@ -3,6 +3,7 @@ from typing import Optional
 import uuid
 from config.logger import get_logger
 from models.rooms import Room, RoomActivity, RoomActivityTypes, RoomMember
+from models.message import RoomSummaries
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -69,13 +70,24 @@ class RoomHanler:
                     return {
                         "members": [],
                         "activities": [],
-                        "room": None
+                        "room": None,
+                        "summary": None,
                     }
+
+                # fetch latest summary for this room if one exists
+                summary_result = await session.execute(
+                    select(RoomSummaries)
+                    .where(RoomSummaries.room_id == room_id)
+                    .order_by(RoomSummaries.created_at.desc())
+                    .limit(1)
+                )
+                latest_summary = summary_result.scalar_one_or_none()
 
                 return {
                     "members": room.get_members(active_only=True),
                     "activities": room.get_activities(),
-                    "room": room.to_dict()
+                    "room": room.to_dict(),
+                    "summary": latest_summary.summary if latest_summary else None,
                 }
 
         except Exception as e:

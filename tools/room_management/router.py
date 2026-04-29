@@ -101,11 +101,11 @@ async def exit_room(ctx: Context) -> str:
 
 async def setup_agents_md(ctx: Context) -> str:
     """
-    ALWAYS call this to configure AGENTS.md for Backrooms in the current directory.
-    This is ONLY about the AGENTS.md file — it has nothing to do with creating or joining rooms.
+    ALWAYS call this to configure AGENTS.md and CLAUDE.md for Backrooms in the current directory.
+    This is ONLY about the AGENTS.md and CLAUDE.md files — it has nothing to do with creating or joining rooms.
     Call this after init_room to ensure all AI tools automatically join the room at session start.
     
-    Also call this anytime AGENTS.md is missing or the Backrooms section is outdated.
+    Also call this anytime AGENTS.md or CLAUDE.md is missing or the Backrooms section is outdated.
     """
     room_management = RoomManagement(ctx)
     return await room_management.setup_agents_md()

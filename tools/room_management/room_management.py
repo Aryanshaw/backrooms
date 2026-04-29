@@ -48,6 +48,9 @@ class RoomManagement(BackroomsBase):
             joined_message = await self.join_room(str(room_data.get("room_id")))
             if joined_message.startswith("FAILED"):
                 return "FAILED: failed to join room after initializing"
+            
+            # setup AGENTS.md and CLAUDE.md
+            await self.setup_agents_md()
 
             logger.info(f"Room '{name}' initialized and joined.")
             return f"Room '{name}' initialized and joined."
@@ -104,8 +107,15 @@ class RoomManagement(BackroomsBase):
                 activity_log,
             )
 
-            logger.info(f"Joined room '{room_data.get('room').get('name')}'.")
-            return f"Joined room '{room_data.get('room').get('name')}'."
+            room_name = room_data.get("room").get("name")
+            summary = room_data.get("summary")
+
+            logger.info(f"Joined room '{room_name}'.")
+
+            if summary:
+                return f"Joined room '{room_name}'.\n\nLast summary:\n{summary}"
+            else:
+                return f"Joined room '{room_name}'. No summary yet — call pull_messages to load recent history."
         except Exception as e:
             logger.error(f"Error joining room: {str(e)}")
             return f"FAILED to join room: {str(e)}"
@@ -190,29 +200,43 @@ class RoomManagement(BackroomsBase):
         
     async def setup_agents_md(self) -> str:
         """
-        Create or update AGENTS.md with Backrooms instructions.
+        Create or update AGENTS.md and CLAUDE.md with Backrooms instructions.
         Uses markers to safely update only the Backrooms section without touching existing content.
         """
         try:
             agents_md_path = Path.cwd() / "AGENTS.md"
+            claude_md_path = Path.cwd() / "CLAUDE.md"
+
+            if not claude_md_path.exists():
+                claude_md_path.write_text(BACKROOMS_SECTION)
+                return "CLAUDE.md created with Backrooms section."
 
             if not agents_md_path.exists():
                 agents_md_path.write_text(BACKROOMS_SECTION)
                 return "AGENTS.md created with Backrooms section."
 
-            content = agents_md_path.read_text()
+            agents_content = agents_md_path.read_text()
+            claude_content = claude_md_path.read_text()
 
-            if BACKROOMS_MARKER_START in content and BACKROOMS_MARKER_END in content:
+            if BACKROOMS_MARKER_START in agents_content and BACKROOMS_MARKER_END in agents_content:
                 # replace only the backrooms section
-                before = content[:content.index(BACKROOMS_MARKER_START)]
-                after = content[content.index(BACKROOMS_MARKER_END) + len(BACKROOMS_MARKER_END):]
+                before = agents_content[:agents_content.index(BACKROOMS_MARKER_START)]
+                after = agents_content[agents_content.index(BACKROOMS_MARKER_END) + len(BACKROOMS_MARKER_END):]
                 agents_md_path.write_text(before + BACKROOMS_SECTION + after)
                 return "AGENTS.md Backrooms section updated."
 
+            if BACKROOMS_MARKER_START in claude_content and BACKROOMS_MARKER_END in claude_content:
+                # replace only the backrooms section
+                before = claude_content[:claude_content.index(BACKROOMS_MARKER_START)]
+                after = claude_content[claude_content.index(BACKROOMS_MARKER_END) + len(BACKROOMS_MARKER_END):]
+                claude_md_path.write_text(before + BACKROOMS_SECTION + after)
+                return "CLAUDE.md Backrooms section updated."
+
             # append if markers not found
-            agents_md_path.write_text(content.rstrip() + "\n\n" + BACKROOMS_SECTION)
-            return "Backrooms section appended to existing AGENTS.md."
+            agents_md_path.write_text(agents_content.rstrip() + "\n\n" + BACKROOMS_SECTION)
+            claude_md_path.write_text(claude_content.rstrip() + "\n\n" + BACKROOMS_SECTION)
+            return "Backrooms section appended to existing AGENTS.md CLAUDE.md."
 
         except Exception as e:
-            logger.error(f"Error setting up AGENTS.md: {str(e)}")
-            return f"FAILED to setup AGENTS.md: {str(e)}"
+            logger.error(f"Error setting up AGENTS.md and CLAUDE.md: {str(e)}")
+            return f"FAILED to setup AGENTS.md and CLAUDE.md: {str(e)}"

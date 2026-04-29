@@ -17,7 +17,7 @@
 │                            │ MCP tool calls                    │
 │                            ▼                                   │
 │              ┌─────────────────────────┐                       │
-│              │      .memroom.json      │  ← local anchor       │
+│              │      .backroom.json      │  ← local anchor       │
 │              │  { room: "melina",      │    per directory      │
 │              │    owner: "github-id" } │                       │
 │              └─────────────┬───────────┘                       │
@@ -76,13 +76,13 @@
        │
        │ /memroom init <name>
        ▼
-  [ .memroom.json written ]
+  [ .backroom.json written ]
        │
        │ agent session starts
        ▼
   [ join_room called ]  ◄────────────────────────────────┐
        │                                                  │
-       ├── linked join → .memroom.json written            │
+       ├── linked join → .backroom.json written            │
        │                                                  │
        └── floating join → session state only             │
        │                                                  │
@@ -91,7 +91,7 @@
        │
        │ exit_room()
        ▼
-  [ .memroom.json deleted ]
+  [ .backroom.json deleted ]
        │
        ▼
   [ Uninitialized — back to start ]
@@ -99,13 +99,13 @@
 
 ---
 
-## Missing `.memroom.json` Decision Flow
+## Missing `.backroom.json` Decision Flow
 
 ```
   Agent session starts
          │
          ▼
-  .memroom.json exists?
+  .backroom.json exists?
     │           │
    YES          NO
     │           │
@@ -128,11 +128,11 @@
 ```
 ~/projects/
 ├── melina-frontend/
-│   └── .memroom.json  ──────────┐
+│   └── .backroom.json  ──────────┐
 ├── melina-backend/              ├──► room: "melina-studio" (server)
-│   └── .memroom.json  ──────────┤
+│   └── .backroom.json  ──────────┤
 └── melina-infra/                │
-    └── .memroom.json  ──────────┘
+    └── .backroom.json  ──────────┘
 
 All three dirs push/pull from the same room.
 Same mental model as multiple git clones → same remote.

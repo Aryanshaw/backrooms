@@ -17,28 +17,29 @@ The messaging module gives rooms a persistent, append-only message log. Every ag
 ## User Stories
 
 1. As an agent, I want to push both the user message and my response together in one tool call so that the number of tool calls per turn stays minimal.
-2. As an agent, I want push_message to read the active room from .memroom.json automatically so that I don't have to pass the room explicitly on every call.
+2. As an agent, I want push_message to read the active room from .backroom.json automatically so that I don't have to pass the room explicitly on every call.
 3. As an agent, I want push_message to insert both messages as separate rows in a single database transaction so that the message log is always consistent.
 4. As an agent, I want the server to assign timestamps server-side so that message ordering is always reliable regardless of which tool pushed them.
 5. As an agent, I want push_message to return a simple status:ok response in the normal case so that I can continue without processing overhead.
 6. As an agent, I want push_message to return status:summary_needed when token accumulation since the last summary exceeds the threshold so that I know when to generate a new summary.
 7. As an agent, I want the summary_needed response to include the last_summarized_message_id so that I know exactly where to start pulling unsummarized messages from.
 8. As an agent, I want the summary_needed response to include unsummarized_message_count so that I can decide whether to generate a summary immediately or defer.
-9. As an agent, I want to call pull_messages at session start to retrieve recent conversation history so that I have context before starting work.
-10. As an agent, I want pull_messages to return messages in chronological order so that I can follow the conversation naturally.
-11. As an agent, I want pull_messages to support a limit parameter (default 20) so that I can control how many messages I receive.
-12. As an agent, I want pull_messages to support an offset parameter (default 0) so that I can paginate through the full message history.
-13. As an agent, I want pull_messages to support an after_id parameter so that I can retrieve only messages after a specific message_id for summary generation.
-14. As an agent, I want pull_messages to return total_messages count so that I know how large the full message log is.
-15. As an agent, I want pull_messages to return has_more so that I know whether there are older messages I haven't seen.
-16. As a developer, I want the message log to be append-only so that no messages are ever deleted or modified.
-17. As a developer, I want each message to store role (user/assistant) so that the conversation structure is preserved.
-18. As a developer, I want message content stored as plain text so that retrieval and rendering stays simple.
-19. As a developer, I want the room record to track total_tokens and last_summary_tokens so that token accumulation can be calculated without scanning all messages.
-20. As a developer, I want token count estimated as len(content) / 4 so that there is no dependency on an external tokenizer.
-21. As a developer, I want the summary trigger threshold set at 8000 tokens since last summary so that summaries are generated at a meaningful cadence.
-22. As a developer, I want acceptable message loss when an agent crashes mid-session so that the system stays simple without zero-loss guarantees.
-23. As a developer, I want message pairs that are partially pushed (user message only, no assistant) to remain in the log without special handling so that the system doesn't need rollback logic.
+9. As an agent, I want join_room to return the latest room summary automatically so that I am oriented immediately without making a separate tool call.
+10. As an agent, I want to call pull_messages at session start after join_room to retrieve recent raw messages so that I have the full picture of recent activity beyond the summary.
+11. As an agent, I want pull_messages to return messages in chronological order so that I can follow the conversation naturally.
+12. As an agent, I want pull_messages to support a limit parameter (default 20) so that I can control how many messages I receive.
+13. As an agent, I want pull_messages to support an offset parameter (default 0) so that I can paginate through the full message history.
+14. As an agent, I want pull_messages to support an after_id parameter so that I can retrieve only messages after a specific message_id for summary generation.
+15. As an agent, I want pull_messages to return total_messages count so that I know how large the full message log is.
+16. As an agent, I want pull_messages to return has_more so that I know whether there are older messages I haven't seen.
+17. As a developer, I want the message log to be append-only so that no messages are ever deleted or modified.
+18. As a developer, I want each message to store role (user/assistant) so that the conversation structure is preserved.
+19. As a developer, I want message content stored as plain text so that retrieval and rendering stays simple.
+20. As a developer, I want the room record to track total_tokens and last_summary_tokens so that token accumulation can be calculated without scanning all messages.
+21. As a developer, I want token count estimated as len(content) / 4 so that there is no dependency on an external tokenizer.
+22. As a developer, I want the summary trigger threshold set at 8000 tokens since last summary so that summaries are generated at a meaningful cadence.
+23. As a developer, I want acceptable message loss when an agent crashes mid-session so that the system stays simple without zero-loss guarantees.
+24. As a developer, I want message pairs that are partially pushed (user message only, no assistant) to remain in the log without special handling so that the system doesn't need rollback logic.
 
 ---
 
@@ -47,10 +48,10 @@ The messaging module gives rooms a persistent, append-only message log. Every ag
 ### Modules
 
 **1. push_message tool**
-Accepts `user_content` and `assistant_content` as the only inputs. Room is resolved from `.memroom.json` in the agent's working directory. `user_id` comes from auth. Inserts two rows (role: user, role: assistant) in a single database transaction. After insert, updates `room.total_tokens` by adding estimated tokens for both messages. Computes `total_tokens - last_summary_tokens` and if it exceeds 8000, returns `summary_needed` signal with `last_summarized_message_id` and `unsummarized_message_count`. Otherwise returns `{ status: "ok" }`.
+Accepts `user_content` and `assistant_content` as the only inputs. Room is resolved from `.backroom.json` in the agent's working directory. `user_id` comes from auth. Inserts two rows (role: user, role: assistant) in a single database transaction. After insert, updates `room.total_tokens` by adding estimated tokens for both messages. Computes `total_tokens - last_summary_tokens` and if it exceeds 8000, returns `summary_needed` signal with `last_summarized_message_id` and `unsummarized_message_count`. Otherwise returns `{ status: "ok" }`.
 
 **2. pull_messages tool**
-Accepts `limit` (default 20), `offset` (default 0), `after_id` (optional). Room resolved from `.memroom.json`. If `after_id` is provided, returns all messages after that message_id in chronological order up to limit. If no `after_id`, returns the last N messages by created_at descending, then re-ordered ascending for readability. Returns `{ messages, total_messages, has_more }`.
+Accepts `limit` (default 20), `offset` (default 0), `after_id` (optional). Room resolved from `.backroom.json`. If `after_id` is provided, returns all messages after that message_id in chronological order up to limit. If no `after_id`, returns the last N messages by created_at descending, then re-ordered ascending for readability. Returns `{ messages, total_messages, has_more }`.
 
 **3. messages table**
 ```
@@ -77,10 +78,26 @@ last_summarized_message_id  uuid → messages
 - Token estimation is `len(content) / 4` — no external tokenizer dependency
 - Summary generation is never triggered by the server — server only signals need, agent generates
 - Agent pulls messages itself for summary generation using `after_id` from push_message response
-- pull_messages and summary are separate concerns — pull_messages returns raw messages only, summary comes from join_room response
+- Summary is returned by join_room, not pull_messages — when an agent joins a room, join_room automatically returns the latest room summary so the agent is oriented immediately in a single call, without needing a separate summary fetch tool
+- pull_messages returns raw messages only — no summary mixed in, clean separation of concerns
+- Session start flow is always: join_room (get summary) → pull_messages (get recent raw messages) — two calls, each with a single clear responsibility
 - Message loss on agent crash is acceptable — no retry or queue mechanism for v1
 
-### API Contracts
+### MCP Contracts
+
+join_room (updated — belongs to room management module but documented here for clarity):
+```
+output: {
+  room_name: str,
+  member_count: int,
+  latest_summary: {
+    content: str,
+    to_message_id: str,
+    created_at: str
+  } | null,   ← null if no summary exists yet
+  total_messages: int
+}
+```
 
 push_message:
 ```
@@ -112,7 +129,7 @@ Good tests verify external behavior — what the tool returns and what side effe
 Modules to test:
 
 - `push_message` — assert two rows inserted per call, assert transaction atomicity (if second insert fails, first is rolled back), assert total_tokens updated correctly, assert status:ok returned under threshold, assert summary_needed returned when threshold exceeded with correct last_summarized_message_id
-- `push_message` with missing .memroom.json — assert graceful error returned
+- `push_message` with missing .backroom.json — assert graceful error returned
 - `pull_messages` with no after_id — assert last N messages returned in chronological order, assert has_more is correct, assert total_messages is accurate
 - `pull_messages` with after_id — assert only messages after that id are returned, assert correct ordering
 - `pull_messages` pagination — assert offset and limit work correctly across multiple calls

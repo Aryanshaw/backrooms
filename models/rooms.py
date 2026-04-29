@@ -114,6 +114,8 @@ class RoomActivityTypes(str, enum.Enum):
     ACCESS_GRANTED = "access_granted"
     ACCESS_REVOKED = "access_revoked"
 
+    SUMMARY_CREATED = "summary_created"
+
 
 class RoomActivity(Base):
     __tablename__ = "room_activity"
