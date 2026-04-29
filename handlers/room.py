@@ -24,7 +24,7 @@ class RoomHanler:
                 session.add(room)
 
                 # mark the current user as the owner of the room
-                room_member = RoomMember(id=room_member_id, room_id=room_id, user_id=user_id, joined_at=datetime.now())
+                room_member = RoomMember(id=room_member_id, room_id=room_id, user_id=user_id, joined_at=datetime.now(), status="active", role="owner")
                 session.add(room_member)
 
                 # create a new activity log that a new room was added
@@ -73,7 +73,7 @@ class RoomHanler:
                     }
 
                 return {
-                    "members": room.get_members(),
+                    "members": room.get_members(active_only=True),
                     "activities": room.get_activities(),
                     "room": room.to_dict()
                 }
@@ -89,7 +89,7 @@ class RoomHanler:
                     select(Room)
                     .join(RoomMember, RoomMember.room_id == Room.id)
                     .options(selectinload(Room.members))
-                    .where(RoomMember.user_id == user_id)
+                    .where(RoomMember.user_id == user_id, RoomMember.status == "active")
                     .order_by(Room.last_active.desc())
                 )
                 rooms = result.scalars().unique().all()
@@ -101,7 +101,7 @@ class RoomHanler:
                     "owner_id": room.owner_id,
                     "created_at": room.created_at.isoformat(),
                     "last_active": room.last_active.isoformat(),
-                    "member_count": len(room.members),
+                    "member_count": len([member for member in room.members if member.is_active]),
                 }
                 for room in rooms
             ]
@@ -112,12 +112,69 @@ class RoomHanler:
     async def join_room(self, room_id: str, user_id: str) -> bool:
         try:
             async with self.db.session() as session:
-                room_member = RoomMember(id=str(uuid.uuid4()), room_id=room_id, user_id=user_id, joined_at=datetime.now())
-                session.add(room_member)
+                result = await session.execute(
+                    select(RoomMember)
+                    .where(RoomMember.room_id == room_id, RoomMember.user_id == user_id)
+                    .order_by(RoomMember.created_at.desc())
+                )
+                room_member = result.scalars().first()
+
+                if room_member:
+                    room_member.status = "active"
+                    room_member.joined_at = datetime.now()
+                    room_member.updated_at = datetime.now()
+                else:
+                    room_result = await session.execute(
+                        select(Room.owner_id).where(Room.id == room_id)
+                    )
+                    owner_id = room_result.scalar_one_or_none()
+                    role = "owner" if owner_id == user_id else "member"
+                    room_member = RoomMember(id=str(uuid.uuid4()), room_id=room_id, user_id=user_id, joined_at=datetime.now(), status="active", role=role)
+                    session.add(room_member)
+
+                room_result = await session.execute(
+                    select(Room)
+                    .where(Room.id == room_id)
+                )
+                room = room_result.scalar_one_or_none()
+                if room:
+                    room.last_active = datetime.now()
+                    room.updated_at = datetime.now()
+
                 await session.commit()
             return True
         except Exception as e:
             logger.error(f"Failed to join room: {str(e)}")
+            raise Exception from e
+
+    async def exit_room(self, room_id: str, user_id: str) -> bool:
+        try:
+            async with self.db.session() as session:
+                result = await session.execute(
+                    select(RoomMember)
+                    .where(RoomMember.room_id == room_id, RoomMember.user_id == user_id, RoomMember.status == "active")
+                )
+                room_members = result.scalars().all()
+                if not room_members:
+                    return False
+
+                now = datetime.now()
+                for room_member in room_members:
+                    room_member.status = "inactive"
+                    room_member.updated_at = now
+
+                room_result = await session.execute(
+                    select(Room).where(Room.id == room_id)
+                )
+                room = room_result.scalar_one_or_none()
+                if room:
+                    room.last_active = now
+                    room.updated_at = now
+
+                await session.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to exit room: {str(e)}")
             raise Exception from e
 
     async def log_room_activity(self, room_id: str, user_id: str, activity_type: str , activity_log: str):

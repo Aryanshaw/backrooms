@@ -1,7 +1,7 @@
 import enum
 from config.db import Base
 
-from sqlalchemy import JSON, Column, String, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, String, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -41,8 +41,11 @@ class Room(Base):
     def update_timestamp(self):
         self.updated_at = datetime.now()
 
-    def get_members(self):
-        return [member.to_dict() for member in self.members]
+    def get_members(self, active_only: bool = False):
+        members = self.members
+        if active_only:
+            members = [member for member in members if member.is_active]
+        return [member.to_dict() for member in members]
 
 
     def get_activities(self):
@@ -57,9 +60,15 @@ class RoomMember(Base):
     )
     user_id = Column(String, nullable=False)
     joined_at = Column(DateTime, default=datetime.now)
+    status = Column(String, nullable=False, default="active")
+    role = Column(String, nullable=False, default="member")
     room = relationship("Room", back_populates="members")
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now)
+
+    @property
+    def is_active(self) -> bool:
+        return self.status == "active"
 
     def to_dict(self):
         return {
@@ -67,6 +76,8 @@ class RoomMember(Base):
             "room_id": str(self.room_id),
             "user_id": self.user_id,
             "joined_at": self.joined_at,
+            "status": self.status,
+            "role": self.role,
         }
 
 

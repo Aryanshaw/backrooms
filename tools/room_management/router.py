@@ -85,6 +85,20 @@ async def list_rooms(ctx: Context) -> str:
 
 
 @room_management_router.tool()
+async def exit_room(ctx: Context) -> str:
+    """
+    Call this to leave the active Backroom in the current directory.
+    Marks the membership as inactive and removes the local .backroom.json file.
+
+    INPUT:
+    - ctx (Context): FastMCP request context
+
+    OUTPUT:
+    text response denoting the success/failure status
+    """
+    room_management = RoomManagement(ctx)
+    return await room_management.exit_room()
+
 async def setup_agents_md(ctx: Context) -> str:
     """
     ALWAYS call this to configure AGENTS.md for Backrooms in the current directory.
