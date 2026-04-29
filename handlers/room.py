@@ -98,7 +98,6 @@ class RoomHanler:
                 {
                     "id": str(room.id),
                     "name": room.name,
-                    "owner_id": room.owner_id,
                     "created_at": room.created_at.isoformat(),
                     "last_active": room.last_active.isoformat(),
                     "member_count": len(room.members),
