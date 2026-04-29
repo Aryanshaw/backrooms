@@ -137,3 +137,19 @@ class RoomManagement():
         except Exception as e:
             logger.error(f"Error getting room info: {str(e)}")
             return f"FAILED to get room info: {str(e)}"
+        
+    async def list_rooms(self) -> list:
+        """
+        - Get the current user's ID 
+        - Query the database for all rooms owned by this user
+        - Return room details with last_active and active tool list
+        - Order by last_active desc
+        """
+        try:
+            rooms = await self.room_handler.list_rooms(self.user_id)
+            logger.info(f"Retrieved rooms for user {self.user_id}: {rooms}")
+            return rooms
+        except Exception as e:
+            logger.error(f"Error listing rooms: {str(e)}")
+            return []
+        

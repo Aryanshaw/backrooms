@@ -3,6 +3,7 @@ from typing import Optional
 from fastmcp import FastMCP, Context
 from config.logger import get_logger
 from sqlalchemy import text
+import json
 
 from tools.room_management.room_management import RoomManagement
 
@@ -62,6 +63,23 @@ async def get_current_room(room_id: Optional[str] = None, ctx: Context = None) -
     """
     room_management = RoomManagement(ctx)
     return await room_management.get_room_info(room_id)
+
+@room_management_router.tool()
+async def list_rooms(ctx: Context) -> str:
+    """
+    Call this to get a list of all available Backrooms owned by the
+    authenticated user on the server.
+
+    INPUT:
+    - ctx (Context): FastMCP request context
+
+    OUTPUT:
+    text response containing the list of room names ordered by activity
+    """
+    room_management = RoomManagement(ctx)
+    rooms = await room_management.list_rooms()
+    return json.dumps(rooms, indent=4)
+
 
 @room_management_router.tool()
 async def test_db_connection(ctx: Context) -> str:
