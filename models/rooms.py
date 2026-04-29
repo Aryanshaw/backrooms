@@ -1,7 +1,7 @@
 import enum
 from config.db import Base
 
-from sqlalchemy import JSON, Column, String, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -17,6 +17,7 @@ class Room(Base):
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now)
     last_active = Column(DateTime, default=datetime.now)
+    invite_version = Column(Integer, nullable=False, default=1)
     agenda = Column(String, nullable=True)
     custom_instructions = Column(String, nullable=True)
     members = relationship(
@@ -34,6 +35,7 @@ class Room(Base):
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "last_active": self.last_active,
+            "invite_version": int(self.invite_version),
             "agenda": self.agenda,
             "custom_instructions": self.custom_instructions,
         }

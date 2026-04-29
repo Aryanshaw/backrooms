@@ -28,7 +28,7 @@ async def init_room(name: str, ctx: Context) -> str:
     return await room_management.init_room(name)
 
 @room_management_router.tool()
-async def join_room(room_id: Optional[str] = None, ctx: Context = None) -> str:
+async def join_room(room_id: Optional[str] = None, token: Optional[str] = None, ctx: Context = None) -> str:
     """
     ALWAYS call this at the start of every session if .backroom.json exists.
     Reads the local .backroom.json and registers this agent as an active member.
@@ -37,12 +37,13 @@ async def join_room(room_id: Optional[str] = None, ctx: Context = None) -> str:
     - room_id (Optional[str]): room_id to join
         - if not provided, read .backroom.json from cwd and get the room_id
         - if provided, use the provided room_id
+    - token (Optional[str]): invite token to validate and join with
 
     OUPUT:
     text response denoting the success/failure status
     """
     room_management = RoomManagement(ctx)
-    return await room_management.join_room(room_id)
+    return await room_management.join_room(room_id=room_id, token=token)
 
 @room_management_router.tool()
 async def get_current_room(room_id: Optional[str] = None, ctx: Context = None) -> str:
@@ -78,6 +79,39 @@ async def list_rooms(ctx: Context) -> str:
     """
     room_management = RoomManagement(ctx)
     return await room_management.list_rooms()
+
+
+@room_management_router.tool()
+async def generate_invite(room_id: str, ctx: Context) -> str:
+    """
+    Owner-only room invite generation.
+    Increments the room invite version, invalidates all older invite tokens,
+    and returns a newly signed invite token that expires in 24 hours.
+
+    INPUT:
+    - room_id (str): room id to generate an invite for
+
+    OUTPUT:
+    invite token string or a FAILED response
+    """
+    room_management = RoomManagement(ctx)
+    return await room_management.generate_invite(room_id)
+
+
+@room_management_router.tool()
+async def exit_room(ctx: Context) -> str:
+    """
+    Call this to leave the active Backroom in the current directory.
+    Marks the membership as inactive and removes the local .backroom.json file.
+
+    INPUT:
+    - ctx (Context): FastMCP request context
+
+    OUTPUT:
+    text response denoting the success/failure status
+    """
+    room_management = RoomManagement(ctx)
+    return await room_management.exit_room()
 
 
 @room_management_router.tool()
