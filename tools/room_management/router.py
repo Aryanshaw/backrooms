@@ -3,6 +3,8 @@ from fastmcp import FastMCP, Context
 from config.logger import get_logger
 from sqlalchemy import text
 
+from tools.room_management.room_management import RoomManagement
+
 logger = get_logger(__name__)
 
 room_management_router = FastMCP("room-management")
@@ -10,23 +12,20 @@ room_management_router = FastMCP("room-management")
 @room_management_router.tool()
 async def init_room(name: str, ctx: Context) -> str:
     """
-    ALWAYS call this to initialize a new MemRoom in the current directory.
-    Creates a .memroom.json file and registers the room on the server.
+    ALWAYS call this to initialize a new Backroom in the current directory.
+    Creates a .backroom.json file and registers the room on the server.
     """
-    db = ctx.lifespan_context.get("db")
-    if db is None:
-        return "FAILED: db is None — lifespan context not populated"
-    # your logic here
-    return f"Room '{name}' initialized."
+    room_management = RoomManagement(ctx)
+    return await room_management.init_room(name)
 
 @room_management_router.tool()
 async def join_room(ctx: Context) -> str:
     """
-    ALWAYS call this at the start of every session if .memroom.json exists.
-    Reads the local .memroom.json and registers this agent as an active member.
+    ALWAYS call this at the start of every session if .backroom.json exists.
+    Reads the local .backroom.json and registers this agent as an active member.
     """
     # your logic here
-    return "Joined room."
+    return "Joined Backroom."
 
 @room_management_router.tool()
 async def get_current_room(ctx: Context) -> str:
@@ -35,7 +34,7 @@ async def get_current_room(ctx: Context) -> str:
     Returns room name and summary.
     """
     # your logic here
-    return "Current room: ..."
+    return "Current Backroom: ..."
 
 @room_management_router.tool()
 async def test_db_connection(ctx: Context) -> str:

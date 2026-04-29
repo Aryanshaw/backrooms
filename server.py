@@ -3,12 +3,12 @@
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastmcp import Context, FastMCP
+from fastmcp import FastMCP
 from fastmcp.server.http import create_streamable_http_app
 
 from config.db import connect_db
 from config.logger import get_logger
-from tools.room_management.router import room_management_router as room_management_router
+from tools.room_management.router import room_management_router
 
 
 logger = get_logger(__name__)
