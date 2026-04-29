@@ -41,6 +41,13 @@ class Room(Base):
     def update_timestamp(self):
         self.updated_at = datetime.now()
 
+    def get_members(self):
+        return [member.to_dict() for member in self.members]
+
+
+    def get_activities(self):
+        return [activity.to_dict() for activity in self.activities]
+
 
 class RoomMember(Base):
     __tablename__ = "room_members"
