@@ -8,7 +8,7 @@ import json
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from models.rooms import Room
+from handlers.room import RoomHanler
 
 logger = get_logger(__name__)
 
@@ -18,6 +18,12 @@ class RoomManagement():
         self.user_id = os.getenv("BACKROOMS_USER_ID")
         if not self.user_id:
             raise ValueError("BACKROOMS_USER_ID is not set in environment.")
+        
+        self.db = self.ctx.lifespan_context.get("db")
+        if not self.db:
+            raise ValueError("FAILED: db is None — lifespan context not populated")
+        
+        self.room_handler = RoomHanler(self.ctx.lifespan_context.get("db"))
 
     async def init_room(self, name: str) -> str:
         """
@@ -33,24 +39,16 @@ class RoomManagement():
                 return "FAILED: .backroom.json already exists"
 
             # create room in database
-            db = self.ctx.lifespan_context.get("db")
-            if db is None:
-                return "FAILED: db is None — lifespan context not populated"
-
-            room_id = uuid.uuid4()
-            async with db.session() as session:
-                room = Room(id=room_id, name=name, owner_id=self.user_id)
-                session.add(room)
-                await session.commit()
+            room_data = await self.room_handler.create_room(name , self.user_id)
             
             config_data = {
-                "id": str(room_id),
+                "id": str(room_data.get("room_id")),
                 "name": name,
                 "owner_id": self.user_id,
                 "created_at": datetime.now().isoformat(),
             }
             config_path.write_text(json.dumps(config_data, indent=4))
-            
+
             logger.info(f"Room '{name}' initialized.")
             return f"Room '{name}' initialized."
         except Exception as e:

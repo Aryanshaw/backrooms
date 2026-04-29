@@ -1,6 +1,7 @@
+import enum
 from config.db import Base
 
-from sqlalchemy import Column, String, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import JSON, Column, String, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -14,11 +15,15 @@ class Room(Base):
     name = Column(String, nullable=False)
     owner_id = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now)
     last_active = Column(DateTime, default=datetime.now)
     agenda = Column(String, nullable=True)
     custom_instructions = Column(String, nullable=True)
     members = relationship(
         "RoomMember", back_populates="room", cascade="all, delete-orphan"
+    )
+    activities = relationship(
+        "RoomActivity", back_populates="room", cascade="all, delete-orphan"
     )
 
     def to_dict(self):
@@ -27,10 +32,14 @@ class Room(Base):
             "name": self.name,
             "owner_id": self.owner_id,
             "created_at": self.created_at,
+            "updated_at": self.updated_at,
             "last_active": self.last_active,
             "agenda": self.agenda,
             "custom_instructions": self.custom_instructions,
         }
+
+    def update_timestamp(self):
+        self.updated_at = datetime.now()
 
 
 class RoomMember(Base):
@@ -40,15 +49,69 @@ class RoomMember(Base):
         UUID(as_uuid=True), ForeignKey("rooms.id", ondelete="CASCADE"), nullable=False
     )
     user_id = Column(String, nullable=False)
-    tool = Column(String, nullable=False)
     joined_at = Column(DateTime, default=datetime.now)
     room = relationship("Room", back_populates="members")
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now)
 
     def to_dict(self):
         return {
-            "id": self.id,
-            "room_id": self.room_id,
+            "id": str(self.id),
+            "room_id": str(self.room_id),
             "user_id": self.user_id,
-            "tool": self.tool,
             "joined_at": self.joined_at,
+        }
+
+
+class RoomActivityTypes(str, enum.Enum):
+    ROOM_CREATED = "room_created"
+    ROOM_DELETED = "room_deleted"
+    ROOM_RENAMED = "room_renamed"
+
+    MEMBER_JOINED = "member_joined"
+    MEMBER_LEFT = "member_left"
+    MEMBER_REMOVED = "member_removed"
+
+    INVITE_CREATED = "invite_created"
+    INVITE_ACCEPTED = "invite_accepted"
+    INVITE_REVOKED = "invite_revoked"
+
+    MESSAGE_SENT = "message_sent"
+    MESSAGE_EDITED = "message_edited"
+    MESSAGE_DELETED = "message_deleted"
+
+    FILE_UPLOADED = "file_uploaded"
+    FILE_DELETED = "file_deleted"
+
+    ROOM_ARCHIVED = "room_archived"
+    ROOM_UNARCHIVED = "room_unarchived"
+
+    SETTINGS_UPDATED = "settings_updated"
+
+    ACCESS_GRANTED = "access_granted"
+    ACCESS_REVOKED = "access_revoked"
+
+
+class RoomActivity(Base):
+    __tablename__ = "room_activity"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    room_id = Column(
+        UUID(as_uuid=True), ForeignKey("rooms.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id = Column(String, nullable=False)
+    activity_type = Column(
+        String, nullable=False
+    )  # "room_created", "member_joined", etc.
+    activity_log = Column(String, nullable=True)  # any extra context
+    created_at = Column(DateTime, default=datetime.now)
+    room = relationship("Room", back_populates="activities")
+
+    def to_dict(self):
+        return {
+            "id": str(self.id),
+            "room_id": str(self.room_id),
+            "user_id": self.user_id,
+            "activity_type": self.activity_type,
+            "activity_log": self.activity_log,
+            "created_at": str(self.created_at),
         }
