@@ -2,6 +2,7 @@
 from fastmcp import FastMCP, Context
 from config.logger import get_logger
 from sqlalchemy import text
+import json
 
 from tools.room_management.room_management import RoomManagement
 
@@ -42,6 +43,37 @@ async def get_current_room(ctx: Context) -> str:
     """
     # your logic here
     return "Current Backroom: ..."
+
+@room_management_router.tool()
+async def list_rooms(ctx: Context) -> str:
+    """
+    Call this to get a list of all available Backrooms owned by the
+    authenticated user on the server.
+
+    INPUT:
+    - ctx (Context): FastMCP request context
+
+    OUTPUT:
+    text response containing the list of room names ordered by activity
+    """
+    room_management = RoomManagement(ctx)
+    rooms = await room_management.list_rooms()
+    return json.dumps(rooms, indent=4)
+
+@room_management_router.tool()
+async def switch_room(name: str, ctx: Context) -> str:
+    """
+    Call this to switch the current directory to a different Backroom.
+    Updates the local .backroom.json file to point to the selected room.
+
+    INPUT:
+    - name (str): name of the room to switch to
+
+    OUTPUT:
+    text response denoting the success/failure status
+    """
+    room_management = RoomManagement(ctx)
+    return await room_management.switch_room(name)
 
 @room_management_router.tool()
 async def test_db_connection(ctx: Context) -> str:

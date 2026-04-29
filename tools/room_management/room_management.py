@@ -5,6 +5,8 @@ from config.logger import get_logger
 from pathlib import Path
 from datetime import datetime
 import json
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from models.rooms import Room
 
@@ -54,3 +56,82 @@ class RoomManagement():
         except Exception as e:
             logger.error(f"Error initializing room: {str(e)}")
             return f"FAILED to initialize room: {str(e)}"
+        
+    async def list_rooms(self) -> list:
+        """
+        - Get the current user's ID 
+        - Query the database for all rooms owned by this user
+        - Return room details with last_active and active tool list
+        - Order by last_active desc
+        """
+        try:
+            db = self.ctx.lifespan_context.get("db")
+            if db is None:
+                logger.error("DB is None — lifespan context not populated")
+                return []
+            async with db.session() as session:
+                result = await session.execute(
+                    select(Room)
+                    .options(selectinload(Room.members))
+                    .where(Room.owner_id == self.user_id)
+                    .order_by(Room.last_active.desc())
+                )
+                rooms = result.scalars().all()
+                room_summaries = [
+                    {
+                        "id": str(room.id),
+                        "name": room.name,
+                        "owner_id": room.owner_id,
+                        "created_at": room.created_at.isoformat(),
+                        "last_active": room.last_active.isoformat(),
+                        "active_tools": sorted({member.tool for member in room.members}),
+                    }
+                    for room in rooms
+                ]
+                logger.info(f"Retrieved rooms for user {self.user_id}: {rooms}")
+                return room_summaries
+        except Exception as e:
+            logger.error(f"Error listing rooms: {str(e)}")
+            return []
+        
+    async def switch_room(self, name: str) -> str:
+        """
+        - Check if .backroom.json exists in cwd — if not, error "not initialized"
+        - Check if a room with that name exists in DB for this user — if not, error
+        - Update .backroom.json with new room_name, owner_id, created_at
+        - Return confirmation with new room name
+        """
+        try:
+            config_path = Path.cwd() / ".backroom.json"
+            if not config_path.exists():
+                return "FAILED: .backroom.json does not exist — not initialized"
+
+            db = self.ctx.lifespan_context.get("db")
+            if db is None:
+                return "FAILED: db is None — lifespan context not populated"
+
+            async with db.session() as session:
+                result = await session.execute(
+                    select(Room.id, Room.created_at).where(
+                        Room.name == name,
+                        Room.owner_id == self.user_id,
+                    )
+                )
+                row = result.first()
+                if row is None:
+                    return f"FAILED: No room named '{name}' found for this user."
+                room_id, created_at = row
+
+            config_data = {
+                "id": str(room_id),
+                "name": name,
+                "owner_id": self.user_id,
+                "created_at": created_at.isoformat(),
+            }
+            config_path.write_text(json.dumps(config_data, indent=4))
+            
+            logger.info(f"Switched to room '{name}'.")
+            return f"Switched to room '{name}'."
+        except Exception as e:
+            logger.error(f"Error switching rooms: {str(e)}")
+            return f"FAILED to switch rooms: {str(e)}"
