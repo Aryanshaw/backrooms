@@ -14,6 +14,13 @@ async def init_room(name: str, ctx: Context) -> str:
     """
     ALWAYS call this to initialize a new Backroom in the current directory.
     Creates a .backroom.json file and registers the room on the server.
+
+    INPUT:
+    - name (str): name of the room to initialize
+
+    OUPUT:
+    text response denoting the success/failure status
+
     """
     room_management = RoomManagement(ctx)
     return await room_management.init_room(name)

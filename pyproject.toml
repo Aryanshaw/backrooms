@@ -1,5 +1,5 @@
 [project]
-name = "fastmcp-server"
+name = "backrooms-server"
 version = "0.1.0"
 description = "FastMCP server with streamable HTTP"
 requires-python = ">=3.11"
