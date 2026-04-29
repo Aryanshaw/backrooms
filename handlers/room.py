@@ -81,6 +81,33 @@ class RoomHanler:
         except Exception as e:
             logger.error(f"Failed to get room: {str(e)}")
             raise Exception from e
+
+    async def list_rooms(self, user_id: str) -> list[dict]:
+        try:
+            async with self.db.session() as session:
+                result = await session.execute(
+                    select(Room)
+                    .join(RoomMember, RoomMember.room_id == Room.id)
+                    .options(selectinload(Room.members))
+                    .where(RoomMember.user_id == user_id)
+                    .order_by(Room.last_active.desc())
+                )
+                rooms = result.scalars().unique().all()
+
+            return [
+                {
+                    "id": str(room.id),
+                    "name": room.name,
+                    "owner_id": room.owner_id,
+                    "created_at": room.created_at.isoformat(),
+                    "last_active": room.last_active.isoformat(),
+                    "member_count": len(room.members),
+                }
+                for room in rooms
+            ]
+        except Exception as e:
+            logger.error(f"Failed to list rooms: {str(e)}")
+            raise Exception from e
     
     async def join_room(self, room_id: str, user_id: str) -> bool:
         try:

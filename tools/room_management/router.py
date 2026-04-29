@@ -80,20 +80,6 @@ async def list_rooms(ctx: Context) -> str:
     rooms = await room_management.list_rooms()
     return json.dumps(rooms, indent=4)
 
-@room_management_router.tool()
-async def switch_room(name: str, ctx: Context) -> str:
-    """
-    Call this to switch the current directory to a different Backroom.
-    Updates the local .backroom.json file to point to the selected room.
-
-    INPUT:
-    - name (str): name of the room to switch to
-
-    OUTPUT:
-    text response denoting the success/failure status
-    """
-    room_management = RoomManagement(ctx)
-    return await room_management.switch_room(name)
 
 @room_management_router.tool()
 async def test_db_connection(ctx: Context) -> str:

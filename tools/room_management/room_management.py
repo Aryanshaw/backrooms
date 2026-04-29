@@ -153,33 +153,3 @@ class RoomManagement():
             logger.error(f"Error listing rooms: {str(e)}")
             return []
         
-    async def switch_room(self, name: str) -> str:
-        """
-        - Check if .backroom.json exists in cwd — if not, error "not initialized"
-        - Check if a room with that name exists in DB for this user — if not, error
-        - Update .backroom.json with new room_name, owner_id, created_at
-        - Return confirmation with new room name
-        """
-        try:
-            config_path = Path.cwd() / ".backroom.json"
-            if not config_path.exists():
-                return "FAILED: .backroom.json does not exist — not initialized"
-            room_data = await self.room_handler.get_room_by_name_for_user(
-                name, self.user_id
-            )
-            if room_data is None:
-                return f"FAILED: No room named '{name}' found for this user."
-
-            config_data = {
-                "id": room_data["id"],
-                "name": name,
-                "owner_id": self.user_id,
-                "created_at": room_data["created_at"],
-            }
-            config_path.write_text(json.dumps(config_data, indent=4))
-            
-            logger.info(f"Switched to room '{name}'.")
-            return f"Switched to room '{name}'."
-        except Exception as e:
-            logger.error(f"Error switching rooms: {str(e)}")
-            return f"FAILED to switch rooms: {str(e)}"
