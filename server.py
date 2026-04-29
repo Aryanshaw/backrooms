@@ -9,6 +9,7 @@ from fastmcp.server.http import create_streamable_http_app
 from config.db import connect_db
 from config.logger import get_logger
 from tools.room_management.router import room_management_router
+from tools.messaging.router import messaging_router
 
 
 logger = get_logger(__name__)
@@ -25,6 +26,7 @@ async def app_lifespan(app):
 
 mcp = FastMCP("MyServer", lifespan=app_lifespan)
 mcp.mount(room_management_router)
+mcp.mount(messaging_router)
 
 @mcp.prompt()
 def backrooms_guide() -> str:

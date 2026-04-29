@@ -1,4 +1,3 @@
-import os
 from typing import Optional
 from fastmcp import Context
 from config.logger import get_logger
@@ -9,32 +8,16 @@ import json
 from handlers.room import RoomHanler
 from models.rooms import RoomActivityTypes
 from prompt import BACKROOMS_MARKER_START , BACKROOMS_MARKER_END , BACKROOMS_SECTION
+from tools.base import BackroomsBase
 
 
 logger = get_logger(__name__)
 
 
-class RoomManagement():
+class RoomManagement(BackroomsBase):
     def __init__(self, ctx: Context):
-        self.ctx = ctx
-        self.user_id = os.getenv("BACKROOMS_USER_ID")
-        if not self.user_id:
-            raise ValueError("BACKROOMS_USER_ID is not set in environment.")
-        
-        self.db = self.ctx.lifespan_context.get("db")
-        if not self.db:
-            raise ValueError("FAILED: db is None — lifespan context not populated")
-        
+        super().__init__(ctx)
         self.room_handler = RoomHanler(self.db)
-
-    def _config_path(self) -> Path:
-        return Path.cwd() / ".backroom.json"
-
-    def _read_config(self) -> dict:
-        return json.loads(self._config_path().read_text())
-
-    def _write_config(self, config_data: dict) -> None:
-        self._config_path().write_text(json.dumps(config_data, indent=4))
 
     async def init_room(self, name: str) -> str:
         """
