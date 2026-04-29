@@ -81,6 +81,22 @@ async def list_rooms(ctx: Context) -> str:
 
 
 @room_management_router.tool()
+async def exit_room(ctx: Context) -> str:
+    """
+    Call this to leave the active Backroom in the current directory.
+    Marks the membership as inactive and removes the local .backroom.json file.
+
+    INPUT:
+    - ctx (Context): FastMCP request context
+
+    OUTPUT:
+    text response denoting the success/failure status
+    """
+    room_management = RoomManagement(ctx)
+    return await room_management.exit_room()
+
+
+@room_management_router.tool()
 async def test_db_connection(ctx: Context) -> str:
     """Test if DB connection is accessible from mounted router."""
     try:

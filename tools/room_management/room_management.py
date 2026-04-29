@@ -24,6 +24,15 @@ class RoomManagement():
         
         self.room_handler = RoomHanler(self.db)
 
+    def _config_path(self) -> Path:
+        return Path.cwd() / ".backroom.json"
+
+    def _read_config(self) -> dict:
+        return json.loads(self._config_path().read_text())
+
+    def _write_config(self, config_data: dict) -> None:
+        self._config_path().write_text(json.dumps(config_data, indent=4))
+
     async def init_room(self, name: str) -> str:
         """
         - Check if .backroom.json already exists in cwd — if yes, return early with "already initialized"
@@ -34,7 +43,7 @@ class RoomManagement():
         - Return confirmation with room name
         """
         try:
-            config_path = Path.cwd() / ".backroom.json"
+            config_path = self._config_path()
             if config_path.exists():
                 return "FAILED: .backroom.json already exists"
 
@@ -47,11 +56,11 @@ class RoomManagement():
                 "owner_id": self.user_id,
                 "created_at": datetime.now().isoformat(),
             }
-            config_path.write_text(json.dumps(config_data, indent=4))
+            self._write_config(config_data)
 
             # join the room
-            joined = await self.join_room(str(room_data.get("room_id")))
-            if not joined:
+            joined_message = await self.join_room(str(room_data.get("room_id")))
+            if joined_message.startswith("FAILED"):
                 return "FAILED: failed to join room after initializing"
 
             logger.info(f"Room '{name}' initialized and joined.")
@@ -60,7 +69,7 @@ class RoomManagement():
             logger.error(f"Error initializing room: {str(e)} after joining")
             return f"FAILED to initialize room: {str(e)} after joining"
     
-    async def join_room(self, room_id: str) -> str:
+    async def join_room(self, room_id: Optional[str]) -> str:
         """
         - Accept room_id as parameter
         - Query DB — if room doesn't exist, return error
@@ -71,18 +80,17 @@ class RoomManagement():
         - Return room name + confirmation
         """
         try:
-            # check if .backroom.json exists
-            config_path = Path.cwd() / ".backroom.json"
-            if not config_path.exists():
-                return "FAILED: .backroom.json not found"
+            config_path = self._config_path()
+            config_data = {}
+            if config_path.exists():
+                config_data = self._read_config()
 
-            # load the .backroom.json file
-            config_data = json.loads(config_path.read_text())
-
-            # get the room_id from the .backroom.json file
-            room_id = config_data.get("id")
             if not room_id:
-                return "FAILED: room_id not found in .backroom.json"
+                if not config_path.exists():
+                    return "FAILED: .backroom.json not found"
+                room_id = config_data.get("id")
+                if not room_id:
+                    return "FAILED: room_id not found in .backroom.json"
 
             # check if the room exists in the database for the user
             room_data = await self.room_handler.get_room(room_id, self.user_id)
@@ -96,17 +104,58 @@ class RoomManagement():
 
             # overwrite .backroom.json with the new room_id + name
             config_data["id"] = room_id
-            config_path.write_text(json.dumps(config_data, indent=4))
+            config_data["name"] = room_data.get("room").get("name")
+            config_data["owner_id"] = room_data.get("room").get("owner_id")
+            config_data.setdefault("created_at", datetime.now().isoformat())
+            self._write_config(config_data)
 
             # log member_joined to room_activity
             activity_log = f"[MEMBER JOINED]-> user_id: {self.user_id} joined room_id: {room_id}"
-            await self.room_handler.log_room_activity(room_id, self.user_id, str(RoomActivityTypes.MEMBER_JOINED), activity_log)
+            await self.room_handler.log_room_activity(
+                room_id,
+                self.user_id,
+                RoomActivityTypes.MEMBER_JOINED.value,
+                activity_log,
+            )
 
             logger.info(f"Joined room '{room_data.get('room').get('name')}'.")
             return f"Joined room '{room_data.get('room').get('name')}'."
         except Exception as e:
             logger.error(f"Error joining room: {str(e)}")
             return f"FAILED to join room: {str(e)}"
+
+    async def exit_room(self) -> str:
+        try:
+            config_path = self._config_path()
+            if not config_path.exists():
+                return "FAILED: .backroom.json not found"
+
+            config_data = self._read_config()
+            room_id = config_data.get("id")
+            if not room_id:
+                return "FAILED: room_id not found in .backroom.json"
+
+            exited = await self.room_handler.exit_room(room_id, self.user_id)
+            if not exited:
+                return "FAILED: no active room membership found"
+
+            activity_log = (
+                f"[MEMBER LEFT]-> user_id: {self.user_id} left room_id: {room_id}"
+            )
+            await self.room_handler.log_room_activity(
+                room_id,
+                self.user_id,
+                RoomActivityTypes.MEMBER_LEFT.value,
+                activity_log,
+            )
+
+            room_name = config_data.get("name", room_id)
+            config_path.unlink(missing_ok=True)
+            logger.info(f"Exited room '{room_name}'.")
+            return f"Exited room '{room_name}'."
+        except Exception as e:
+            logger.error(f"Error exiting room: {str(e)}")
+            return f"FAILED to exit room: {str(e)}"
 
     async def get_room_info(self, room_id: Optional[str] = None) -> str:
         """
@@ -118,11 +167,11 @@ class RoomManagement():
         try:
             # if room_id is not provided, read .backroom.json from cwd and get the room_id
             if not room_id:
-                config_path = Path.cwd() / ".backroom.json"
+                config_path = self._config_path()
                 if not config_path.exists():
                     return "FAILED: .backroom.json not found"
 
-                config_data = json.loads(config_path.read_text())
+                config_data = self._read_config()
                 room_id = config_data.get("id")
                 if not room_id:
                     return "FAILED: room_id not found in .backroom.json"
@@ -151,5 +200,4 @@ class RoomManagement():
             return json.dumps(rooms, indent=4)
         except Exception as e:
             logger.error(f"Error listing rooms: {str(e)}")
-            return f"FAILED to list rooms: {str(e)}"
-        
+            return []
