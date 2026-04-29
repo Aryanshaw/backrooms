@@ -1,5 +1,5 @@
 import os
-import uuid
+from typing import Optional
 from fastmcp import Context
 from config.logger import get_logger
 from pathlib import Path
@@ -7,6 +7,7 @@ from datetime import datetime
 import json
 
 from handlers.room import RoomHanler
+from models.rooms import RoomActivityTypes
 
 logger = get_logger(__name__)
 
@@ -21,7 +22,7 @@ class RoomManagement():
         if not self.db:
             raise ValueError("FAILED: db is None — lifespan context not populated")
         
-        self.room_handler = RoomHanler(self.ctx.lifespan_context.get("db"))
+        self.room_handler = RoomHanler(self.db)
 
     async def init_room(self, name: str) -> str:
         """
@@ -29,6 +30,7 @@ class RoomManagement():
         - Check if a room with that name already exists in DB for this user — if yes, error
         - Insert new row into rooms table
         - Write .backroom.json to cwd with room_name, owner_id, created_at
+        - Join the room
         - Return confirmation with room name
         """
         try:
@@ -47,8 +49,91 @@ class RoomManagement():
             }
             config_path.write_text(json.dumps(config_data, indent=4))
 
-            logger.info(f"Room '{name}' initialized.")
-            return f"Room '{name}' initialized."
+            # join the room
+            joined = await self.join_room(str(room_data.get("room_id")))
+            if not joined:
+                return "FAILED: failed to join room after initializing"
+
+            logger.info(f"Room '{name}' initialized and joined.")
+            return f"Room '{name}' initialized and joined."
         except Exception as e:
-            logger.error(f"Error initializing room: {str(e)}")
-            return f"FAILED to initialize room: {str(e)}"
+            logger.error(f"Error initializing room: {str(e)} after joining")
+            return f"FAILED to initialize room: {str(e)} after joining"
+    
+    async def join_room(self, room_id: str) -> str:
+        """
+        - Accept room_id as parameter
+        - Query DB — if room doesn't exist, return error
+        - Upsert into room_members with user_id, room_id, joined_at
+        - Update last_active on the room row
+        - Overwrite .backroom.json with the new room_id + name
+        - Log member_joined to room_activity
+        - Return room name + confirmation
+        """
+        try:
+            # check if .backroom.json exists
+            config_path = Path.cwd() / ".backroom.json"
+            if not config_path.exists():
+                return "FAILED: .backroom.json not found"
+
+            # load the .backroom.json file
+            config_data = json.loads(config_path.read_text())
+
+            # get the room_id from the .backroom.json file
+            room_id = config_data.get("id")
+            if not room_id:
+                return "FAILED: room_id not found in .backroom.json"
+
+            # check if the room exists in the database for the user
+            room_data = await self.room_handler.get_room(room_id, self.user_id)
+            if not room_data or not room_data.get("room"):
+                return "FAILED: room not found for this user"
+
+            # upsert into room_members with user_id, room_id, joined_at
+            joined = await self.room_handler.join_room(room_id, self.user_id)
+            if not joined:
+                return "FAILED: failed to join room"
+
+            # overwrite .backroom.json with the new room_id + name
+            config_data["id"] = room_id
+            config_path.write_text(json.dumps(config_data, indent=4))
+
+            # log member_joined to room_activity
+            activity_log = f"[MEMBER JOINED]-> user_id: {self.user_id} joined room_id: {room_id}"
+            await self.room_handler.log_room_activity(room_id, self.user_id, str(RoomActivityTypes.MEMBER_JOINED), activity_log)
+
+            logger.info(f"Joined room '{room_data.get('room').get('name')}'.")
+            return f"Joined room '{room_data.get('room').get('name')}'."
+        except Exception as e:
+            logger.error(f"Error joining room: {str(e)}")
+            return f"FAILED to join room: {str(e)}"
+
+    async def get_room_info(self, room_id: Optional[str] = None) -> str:
+        """
+        - Accept room_id as optional parameter
+        - If room_id is not provided, read .backroom.json from cwd — if not found, return error "no room found, call init_room first"
+        - If room_id is provided, query DB — if room doesn't exist, return error
+        - Return room name + list of current members + last_active
+        """
+        try:
+            # if room_id is not provided, read .backroom.json from cwd and get the room_id
+            if not room_id:
+                config_path = Path.cwd() / ".backroom.json"
+                if not config_path.exists():
+                    return "FAILED: .backroom.json not found"
+
+                config_data = json.loads(config_path.read_text())
+                room_id = config_data.get("id")
+                if not room_id:
+                    return "FAILED: room_id not found in .backroom.json"
+
+            # query the room from the database
+            room_data = await self.room_handler.get_room(room_id, self.user_id)
+            if not room_data.get("room"):
+                return "FAILED: room not found for this user"
+
+            # return the room name + list of current members + last_active
+            return f"Room '{room_data.get('room').get('name')}' with {len(room_data.get('members'))} members and last_active: {str(room_data.get('room').get('last_active'))}"
+        except Exception as e:
+            logger.error(f"Error getting room info: {str(e)}")
+            return f"FAILED to get room info: {str(e)}"

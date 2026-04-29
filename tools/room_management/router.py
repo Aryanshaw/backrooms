@@ -1,4 +1,5 @@
 # tools/room_management.py
+from typing import Optional
 from fastmcp import FastMCP, Context
 from config.logger import get_logger
 from sqlalchemy import text
@@ -26,22 +27,41 @@ async def init_room(name: str, ctx: Context) -> str:
     return await room_management.init_room(name)
 
 @room_management_router.tool()
-async def join_room(ctx: Context) -> str:
+async def join_room(room_id: Optional[str] = None, ctx: Context = None) -> str:
     """
     ALWAYS call this at the start of every session if .backroom.json exists.
     Reads the local .backroom.json and registers this agent as an active member.
+
+    INPUT:
+    - room_id (Optional[str]): room_id to join
+        - if not provided, read .backroom.json from cwd and get the room_id
+        - if provided, use the provided room_id
+
+    OUPUT:
+    text response denoting the success/failure status
     """
-    # your logic here
-    return "Joined Backroom."
+    room_management = RoomManagement(ctx)
+    return await room_management.join_room(room_id)
 
 @room_management_router.tool()
-async def get_current_room(ctx: Context) -> str:
+async def get_current_room(room_id: Optional[str] = None, ctx: Context = None) -> str:
     """
     Call this to check which room is currently active in this directory.
     Returns room name and summary.
+
+    INPUT:
+    - room_id (Optional[str]): room_id to get the info for
+        - if not provided, read .backroom.json from cwd and get the room_id
+        - if provided, use the provided room_id
+
+    OUPUT:
+    text response denoting the room name, number of members and last_active
+
+    Example:
+    "Room 'my-room' with 2 members and last_active: 2026-04-29T16:53:22.203471"
     """
-    # your logic here
-    return "Current Backroom: ..."
+    room_management = RoomManagement(ctx)
+    return await room_management.get_room_info(room_id)
 
 @room_management_router.tool()
 async def test_db_connection(ctx: Context) -> str:
