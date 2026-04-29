@@ -138,7 +138,7 @@ class RoomManagement():
             logger.error(f"Error getting room info: {str(e)}")
             return f"FAILED to get room info: {str(e)}"
         
-    async def list_rooms(self) -> list:
+    async def list_rooms(self) -> str:
         """
         - Get the current user's ID 
         - Query the database for all rooms owned by this user
@@ -148,8 +148,8 @@ class RoomManagement():
         try:
             rooms = await self.room_handler.list_rooms(self.user_id)
             logger.info(f"Retrieved rooms for user {self.user_id}: {rooms}")
-            return rooms
+            return json.dumps(rooms, indent=4)
         except Exception as e:
             logger.error(f"Error listing rooms: {str(e)}")
-            return []
+            return f"FAILED to list rooms: {str(e)}"
         

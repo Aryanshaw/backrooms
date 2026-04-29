@@ -77,8 +77,7 @@ async def list_rooms(ctx: Context) -> str:
     text response containing the list of room names ordered by activity
     """
     room_management = RoomManagement(ctx)
-    rooms = await room_management.list_rooms()
-    return json.dumps(rooms, indent=4)
+    return await room_management.list_rooms()
 
 
 @room_management_router.tool()
