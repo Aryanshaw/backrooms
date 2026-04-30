@@ -37,7 +37,7 @@ class Messaging(BackroomsBase):
             logger.error(f"Error in submit_summary: {str(e)}")
             return f"FAILED to submit summary: {str(e)}"
 
-    async def pull_summaries(self, limit: int = 10, offset: int = 0) -> str:
+    async def pull_summaries(self, page: int = 1) -> str:
         try:
             config_path = self._config_path()
             if not config_path.exists():
@@ -48,11 +48,16 @@ class Messaging(BackroomsBase):
             if not room_id:
                 return "FAILED: room_id not found in .backroom.json"
 
+            page = max(1, page)
+            limit = 20
+            offset = (page - 1) * limit
+
             result = await self.message_handler.pull_summaries(
                 room_id=room_id,
                 limit=limit,
                 offset=offset,
             )
+            result["page"] = page
 
             logger.info(f"pull_summaries result for room {room_id}: {result['total']} total")
             return json.dumps(result, default=str)

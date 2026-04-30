@@ -61,24 +61,24 @@ async def submit_summary(content: str, ctx: Context) -> str:
 
 
 @messaging_router.tool()
-async def pull_summaries(ctx: Context, limit: int = 10, offset: int = 0) -> str:
+async def pull_summaries(ctx: Context, page: int = 1) -> str:
     """
     Call this to fetch past summaries from the active room.
-    Returns summaries in chronological order.
+    Returns 10 summaries per page in chronological order.
     Room is resolved automatically from .backroom.json in cwd.
 
     INPUT:
-    - limit (int, default 10): number of summaries to return
-    - offset (int, default 0): number of summaries to skip (for pagination)
+    - page (int, default 1): page number (1-based). page=2 fetches summaries 11-20, etc.
 
     OUTPUT:
     '{
         "summaries": [{ "id": str, "summary": str, "created_at": str }],
         "total": int,
-        "has_more": bool
+        "has_more": bool,
+        "page": int
     }'
 
     NEVER call this if .backroom.json does not exist — call join_room first.
     """
     messaging = Messaging(ctx)
-    return await messaging.pull_summaries(limit=limit, offset=offset)
+    return await messaging.pull_summaries(page=page)
