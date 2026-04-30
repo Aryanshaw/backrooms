@@ -26,6 +26,15 @@ class Room(Base):
     activities = relationship(
         "RoomActivity", back_populates="room", cascade="all, delete-orphan"
     )
+    room_metadata = relationship(
+        "RoomMetadata", back_populates="room", cascade="all, delete-orphan"
+    )
+    messages = relationship(
+        "Messages", back_populates="room", cascade="all, delete-orphan"
+    )
+    room_summaries = relationship(
+        "RoomSummaries", back_populates="room", cascade="all, delete-orphan"
+    )
 
     def to_dict(self):
         return {
@@ -43,8 +52,11 @@ class Room(Base):
     def update_timestamp(self):
         self.updated_at = datetime.now()
 
-    def get_members(self):
-        return [member.to_dict() for member in self.members]
+    def get_members(self, active_only: bool = False):
+        members = self.members
+        if active_only:
+            members = [member for member in members if member.is_active]
+        return [member.to_dict() for member in members]
 
 
     def get_activities(self):
@@ -59,9 +71,15 @@ class RoomMember(Base):
     )
     user_id = Column(String, nullable=False)
     joined_at = Column(DateTime, default=datetime.now)
+    status = Column(String, nullable=False, default="active")
+    role = Column(String, nullable=False, default="member")
     room = relationship("Room", back_populates="members")
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now)
+
+    @property
+    def is_active(self) -> bool:
+        return self.status == "active"
 
     def to_dict(self):
         return {
@@ -69,6 +87,8 @@ class RoomMember(Base):
             "room_id": str(self.room_id),
             "user_id": self.user_id,
             "joined_at": self.joined_at,
+            "status": self.status,
+            "role": self.role,
         }
 
 
@@ -100,6 +120,8 @@ class RoomActivityTypes(str, enum.Enum):
     ACCESS_GRANTED = "access_granted"
     ACCESS_REVOKED = "access_revoked"
 
+    SUMMARY_CREATED = "summary_created"
+
 
 class RoomActivity(Base):
     __tablename__ = "room_activity"
@@ -124,3 +146,28 @@ class RoomActivity(Base):
             "activity_log": self.activity_log,
             "created_at": str(self.created_at),
         }
+
+
+class RoomMetadata(Base):
+    __tablename__ = "room_metadata"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    room_id = Column(
+        UUID(as_uuid=True), ForeignKey("rooms.id", ondelete="CASCADE"), nullable=False
+    )
+    total_tokens = Column(Integer , nullable=False , default=0)
+    last_summary_tokens = Column(Integer , nullable=False , default=0)
+    last_summarized_message_id = Column(String , nullable=True)
+    custom_instructions = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+    room = relationship("Room", back_populates="room_metadata")
+
+    def to_dict(self):
+        return {
+            "id": str(self.id),
+            "room_id": str(self.room_id),
+            "total_tokens": self.total_tokens,
+            "last_summary_tokens": self.last_summary_tokens,
+            "custom_instructions": self.custom_instructions,
+            "created_at": str(self.created_at)
+        }
+

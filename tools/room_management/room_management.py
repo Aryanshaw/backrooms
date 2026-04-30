@@ -1,4 +1,3 @@
-import os
 from typing import Optional
 from fastmcp import Context
 from config.logger import get_logger
@@ -9,21 +8,17 @@ import json
 from handlers.room import RoomHanler
 from models.rooms import RoomActivityTypes
 from tools.room_management.utils import decode_invite_token, sign_invite_token
+from prompt import BACKROOMS_MARKER_START , BACKROOMS_MARKER_END , BACKROOMS_SECTION
+from tools.base import BackroomsBase
+
 
 logger = get_logger(__name__)
 
-class RoomManagement():
+
+class RoomManagement(BackroomsBase):
     def __init__(self, ctx: Context):
         """Bind request context, current user identity, and room handler access."""
-        self.ctx = ctx
-        self.user_id = os.getenv("BACKROOMS_USER_ID")
-        if not self.user_id:
-            raise ValueError("BACKROOMS_USER_ID is not set in environment.")
-        
-        self.db = self.ctx.lifespan_context.get("db")
-        if not self.db:
-            raise ValueError("FAILED: db is None — lifespan context not populated")
-        
+        super().__init__(ctx)
         self.room_handler = RoomHanler(self.db)
 
     def _get_invite_secret(self) -> str:
@@ -118,7 +113,7 @@ class RoomManagement():
         - Return confirmation with room name
         """
         try:
-            config_path = Path.cwd() / ".backroom.json"
+            config_path = self._config_path()
             if config_path.exists():
                 return "FAILED: .backroom.json already exists"
 
@@ -131,12 +126,15 @@ class RoomManagement():
                 "owner_id": self.user_id,
                 "created_at": datetime.now().isoformat(),
             }
-            config_path.write_text(json.dumps(config_data, indent=4))
+            self._write_config(config_data)
 
             # join the room
-            joined = await self.join_room(str(room_data.get("room_id")))
-            if not joined:
+            joined_message = await self.join_room(str(room_data.get("room_id")))
+            if joined_message.startswith("FAILED"):
                 return "FAILED: failed to join room after initializing"
+            
+            # setup AGENTS.md and CLAUDE.md
+            await self.setup_agents_md()
 
             logger.info(f"Room '{name}' initialized and joined.")
             return f"Room '{name}' initialized and joined."
@@ -144,7 +142,7 @@ class RoomManagement():
             logger.error(f"Error initializing room: {str(e)} after joining")
             return f"FAILED to initialize room: {str(e)} after joining"
     
-    async def join_room(self, room_id: Optional[str] = None, token: Optional[str] = None) -> str:
+    async def join_room(self, room_id: str) -> str:
         """
         - Accept room_id or invite token as parameter
         - Query DB — if room doesn't exist, return error
@@ -155,6 +153,22 @@ class RoomManagement():
         - Return room name + confirmation
         """
         try:
+            config_path = self._config_path()
+            config_data = {}
+            if config_path.exists():
+                config_data = self._read_config()
+
+            if not room_id:
+                if not config_path.exists():
+                    return "FAILED: .backroom.json not found"
+                room_id = config_data.get("id")
+                if not room_id:
+                    return "FAILED: room_id not found in .backroom.json"
+
+            # check if the room exists in the database for the user
+            room_data = await self.room_handler.get_room(room_id, self.user_id)
+            if not room_data or not room_data.get("room"):
+                return "FAILED: room not found for this user"
             config_path = self._config_path()
             config_data = {}
             config_exists = config_path.exists()
@@ -171,19 +185,30 @@ class RoomManagement():
                 return "FAILED: failed to join room"
 
             # overwrite .backroom.json with the new room_id + name
-            self._update_local_config(config_data, room_id, room_data)
+            config_data["id"] = room_id
+            config_data["name"] = room_data.get("room").get("name")
+            config_data["owner_id"] = room_data.get("room").get("owner_id")
+            config_data.setdefault("created_at", datetime.now().isoformat())
+            self._write_config(config_data)
 
             # log member_joined to room_activity
             activity_log = f"[MEMBER JOINED]-> user_id: {self.user_id} joined room_id: {room_id}"
             await self.room_handler.log_room_activity(
                 room_id,
                 self.user_id,
-                self._join_activity_type(token),
+                RoomActivityTypes.MEMBER_JOINED.value,
                 activity_log,
             )
 
-            logger.info(f"Joined room '{room_data.get('room').get('name')}'.")
-            return f"Joined room '{room_data.get('room').get('name')}'."
+            room_name = room_data.get("room").get("name")
+            summary = room_data.get("summary")
+
+            logger.info(f"Joined room '{room_name}'.")
+
+            if summary:
+                return f"Joined room '{room_name}'.\n\nLast summary:\n{summary}"
+            else:
+                return f"Joined room '{room_name}'. No summary yet — call pull_messages to load recent history."
         except Exception as e:
             logger.error(f"Error joining room: {str(e)}")
             return f"FAILED to join room: {str(e)}"
@@ -249,6 +274,39 @@ class RoomManagement():
             logger.error(f"Error exiting room: {str(e)}")
             return f"FAILED to exit room: {str(e)}"
 
+    async def exit_room(self) -> str:
+        try:
+            config_path = self._config_path()
+            if not config_path.exists():
+                return "FAILED: .backroom.json not found"
+
+            config_data = self._read_config()
+            room_id = config_data.get("id")
+            if not room_id:
+                return "FAILED: room_id not found in .backroom.json"
+
+            exited = await self.room_handler.exit_room(room_id, self.user_id)
+            if not exited:
+                return "FAILED: no active room membership found"
+
+            activity_log = (
+                f"[MEMBER LEFT]-> user_id: {self.user_id} left room_id: {room_id}"
+            )
+            await self.room_handler.log_room_activity(
+                room_id,
+                self.user_id,
+                RoomActivityTypes.MEMBER_LEFT.value,
+                activity_log,
+            )
+
+            room_name = config_data.get("name", room_id)
+            config_path.unlink(missing_ok=True)
+            logger.info(f"Exited room '{room_name}'.")
+            return f"Exited room '{room_name}'."
+        except Exception as e:
+            logger.error(f"Error exiting room: {str(e)}")
+            return f"FAILED to exit room: {str(e)}"
+
     async def get_room_info(self, room_id: Optional[str] = None) -> str:
         """
         - Accept room_id as optional parameter
@@ -259,11 +317,11 @@ class RoomManagement():
         try:
             # if room_id is not provided, read .backroom.json from cwd and get the room_id
             if not room_id:
-                config_path = Path.cwd() / ".backroom.json"
+                config_path = self._config_path()
                 if not config_path.exists():
                     return "FAILED: .backroom.json not found"
 
-                config_data = json.loads(config_path.read_text())
+                config_data = self._read_config()
                 room_id = config_data.get("id")
                 if not room_id:
                     return "FAILED: room_id not found in .backroom.json"
@@ -292,4 +350,47 @@ class RoomManagement():
             return json.dumps(rooms, indent=4)
         except Exception as e:
             logger.error(f"Error listing rooms: {str(e)}")
-            return []
+            return f"FAILED to list rooms: {str(e)}"
+        
+    async def setup_agents_md(self) -> str:
+        """
+        Create or update AGENTS.md and CLAUDE.md with Backrooms instructions.
+        Uses markers to safely update only the Backrooms section without touching existing content.
+        """
+        try:
+            agents_md_path = Path.cwd() / "AGENTS.md"
+            claude_md_path = Path.cwd() / "CLAUDE.md"
+
+            if not claude_md_path.exists():
+                claude_md_path.write_text(BACKROOMS_SECTION)
+                return "CLAUDE.md created with Backrooms section."
+
+            if not agents_md_path.exists():
+                agents_md_path.write_text(BACKROOMS_SECTION)
+                return "AGENTS.md created with Backrooms section."
+
+            agents_content = agents_md_path.read_text()
+            claude_content = claude_md_path.read_text()
+
+            if BACKROOMS_MARKER_START in agents_content and BACKROOMS_MARKER_END in agents_content:
+                # replace only the backrooms section
+                before = agents_content[:agents_content.index(BACKROOMS_MARKER_START)]
+                after = agents_content[agents_content.index(BACKROOMS_MARKER_END) + len(BACKROOMS_MARKER_END):]
+                agents_md_path.write_text(before + BACKROOMS_SECTION + after)
+                return "AGENTS.md Backrooms section updated."
+
+            if BACKROOMS_MARKER_START in claude_content and BACKROOMS_MARKER_END in claude_content:
+                # replace only the backrooms section
+                before = claude_content[:claude_content.index(BACKROOMS_MARKER_START)]
+                after = claude_content[claude_content.index(BACKROOMS_MARKER_END) + len(BACKROOMS_MARKER_END):]
+                claude_md_path.write_text(before + BACKROOMS_SECTION + after)
+                return "CLAUDE.md Backrooms section updated."
+
+            # append if markers not found
+            agents_md_path.write_text(agents_content.rstrip() + "\n\n" + BACKROOMS_SECTION)
+            claude_md_path.write_text(claude_content.rstrip() + "\n\n" + BACKROOMS_SECTION)
+            return "Backrooms section appended to existing AGENTS.md CLAUDE.md."
+
+        except Exception as e:
+            logger.error(f"Error setting up AGENTS.md and CLAUDE.md: {str(e)}")
+            return f"FAILED to setup AGENTS.md and CLAUDE.md: {str(e)}"

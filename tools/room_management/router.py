@@ -3,7 +3,6 @@ from typing import Optional
 from fastmcp import FastMCP, Context
 from config.logger import get_logger
 from sqlalchemy import text
-import json
 
 from tools.room_management.room_management import RoomManagement
 
@@ -14,8 +13,10 @@ room_management_router = FastMCP("room-management")
 @room_management_router.tool()
 async def init_room(name: str, ctx: Context) -> str:
     """
-    ALWAYS call this to initialize a new Backroom in the current directory.
-    Creates a .backroom.json file and registers the room on the server.
+    ALWAYS call this to create a NEW Backrooms room in the current directory.
+    Creates a .backroom.json file and registers the room in the database.
+    Use this ONLY when starting a fresh project that has no room yet.
+    Do NOT call this if .backroom.json already exists — call join_room instead.
 
     INPUT:
     - name (str): name of the room to initialize
@@ -30,14 +31,19 @@ async def init_room(name: str, ctx: Context) -> str:
 @room_management_router.tool()
 async def join_room(room_id: Optional[str] = None, token: Optional[str] = None, ctx: Context = None) -> str:
     """
-    ALWAYS call this at the start of every session if .backroom.json exists.
-    Reads the local .backroom.json and registers this agent as an active member.
+    ALWAYS call this at the start of every session if .backroom.json exists in cwd.
+    Joins this agent to the specified room and updates .backroom.json.
+    
+    This is how Backrooms shares context across AI tools — Claude Code, Cursor, OpenCode.
+    Each tool calls join_room at session start so all agents are aware of each other.
 
     INPUT:
     - room_id (Optional[str]): room_id to join
         - if not provided, read .backroom.json from cwd and get the room_id
         - if provided, use the provided room_id
     - token (Optional[str]): invite token to validate and join with
+        - if not provided, the tool will read .backroom.json from cwd and get the room_id and join the room with the room_id in the .backroom.json
+        - if provided, the tool will let the agent join the room with the provided room_id
 
     OUPUT:
     text response denoting the success/failure status
@@ -113,6 +119,16 @@ async def exit_room(ctx: Context) -> str:
     room_management = RoomManagement(ctx)
     return await room_management.exit_room()
 
+async def setup_agents_md(ctx: Context) -> str:
+    """
+    ALWAYS call this to configure AGENTS.md and CLAUDE.md for Backrooms in the current directory.
+    This is ONLY about the AGENTS.md and CLAUDE.md files — it has nothing to do with creating or joining rooms.
+    Call this after init_room to ensure all AI tools automatically join the room at session start.
+    
+    Also call this anytime AGENTS.md or CLAUDE.md is missing or the Backrooms section is outdated.
+    """
+    room_management = RoomManagement(ctx)
+    return await room_management.setup_agents_md()
 
 @room_management_router.tool()
 async def test_db_connection(ctx: Context) -> str:

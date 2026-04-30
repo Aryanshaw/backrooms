@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from config.db import Base
-from models import Room, RoomMember
+from models import Room, RoomMember, RoomMetadata, RoomActivity, Messages, RoomSummaries
 
 load_dotenv()
 
