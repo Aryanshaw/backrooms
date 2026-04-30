@@ -68,9 +68,15 @@ def upgrade() -> None:
         ALTER COLUMN role DROP DEFAULT
         """
     )
+    op.create_unique_constraint(
+        "uix_room_member_user",
+        "room_members",
+        ["room_id", "user_id"],
+    )
 
 
 def downgrade() -> None:
+    op.drop_constraint("uix_room_member_user", "room_members", type_="unique")
     op.execute(
         """
         ALTER TABLE rooms

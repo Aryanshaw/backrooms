@@ -88,23 +88,6 @@ async def list_rooms(ctx: Context) -> str:
 
 
 @room_management_router.tool()
-async def generate_invite(room_id: str, ctx: Context) -> str:
-    """
-    Owner-only room invite generation.
-    Increments the room invite version, invalidates all older invite tokens,
-    and returns a newly signed invite token that expires in 24 hours.
-
-    INPUT:
-    - room_id (str): room id to generate an invite for
-
-    OUTPUT:
-    invite token string or a FAILED response
-    """
-    room_management = RoomManagement(ctx)
-    return await room_management.generate_invite(room_id)
-
-
-@room_management_router.tool()
 async def exit_room(ctx: Context) -> str:
     """
     Call this to leave the active Backroom in the current directory.

@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "FastMCP server with streamable HTTP"
 requires-python = ">=3.11"
 dependencies = [
+    "fastapi>=0.115.0",
     "fastmcp>=2.0",
     "uvicorn>=0.30.0",
     "sqlalchemy[asyncio]>=2.0",

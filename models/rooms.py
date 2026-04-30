@@ -65,6 +65,7 @@ class Room(Base):
 
 class RoomMember(Base):
     __tablename__ = "room_members"
+    __table_args__ = (UniqueConstraint("room_id", "user_id", name="uix_room_member_user"),)
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     room_id = Column(
         UUID(as_uuid=True), ForeignKey("rooms.id", ondelete="CASCADE"), nullable=False

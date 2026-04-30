@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 logger = get_logger(__name__)
 
 
-class RoomHanler:
+class RoomHandler:
     def __init__(self, db):
         """Store the shared DB connection wrapper used by room queries."""
         self.db = db
@@ -99,28 +99,6 @@ class RoomHanler:
                         "summary": None,
                     }
 
-                # fetch latest summary for this room if one exists
-                summary_result = await session.execute(
-                    select(RoomSummaries)
-                    .where(RoomSummaries.room_id == room_id)
-                    .order_by(RoomSummaries.created_at.desc())
-                    .limit(1)
-                )
-                latest_summary = summary_result.scalar_one_or_none()
-
-                has_access = room.owner_id == user_id or any(
-                    member.user_id == user_id and member.is_active for member in room.members
-                )
-                if not has_access:
-                    logger.error(
-                        f"Room access denied for user: {user_id} and room_id: {room_id}"
-                    )
-                    return {
-                        "members": [],
-                        "activities": [],
-                        "room": None
-                    }
-
                 return {
                     "members": room.get_members(active_only=True),
                     "activities": room.get_activities(),
@@ -204,9 +182,8 @@ class RoomHanler:
                 result = await session.execute(
                     select(RoomMember)
                     .where(RoomMember.room_id == room_id, RoomMember.user_id == user_id)
-                    .order_by(RoomMember.created_at.desc())
                 )
-                room_member = result.scalars().first()
+                room_member = result.scalar_one_or_none()
 
                 if room_member:
                     room_member.status = "active"
@@ -266,14 +243,13 @@ class RoomHanler:
                     select(RoomMember)
                     .where(RoomMember.room_id == room_id, RoomMember.user_id == user_id, RoomMember.status == "active")
                 )
-                room_members = result.scalars().all()
-                if not room_members:
+                room_member = result.scalar_one_or_none()
+                if not room_member:
                     return False
 
                 now = datetime.now()
-                for room_member in room_members:
-                    room_member.status = "inactive"
-                    room_member.updated_at = now
+                room_member.status = "inactive"
+                room_member.updated_at = now
 
                 room_result = await session.execute(
                     select(Room).where(Room.id == room_id)
