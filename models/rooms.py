@@ -19,7 +19,7 @@ class Room(Base):
     last_active = Column(DateTime, default=datetime.now)
     invite_version = Column(Integer, nullable=False, default=1)
     agenda = Column(String, nullable=True)
-    custom_instructions = Column(String, nullable=True)
+
     members = relationship(
         "RoomMember", back_populates="room", cascade="all, delete-orphan"
     )
@@ -46,7 +46,7 @@ class Room(Base):
             "last_active": self.last_active,
             "invite_version": int(self.invite_version),
             "agenda": self.agenda,
-            "custom_instructions": self.custom_instructions,
+
         }
 
     def update_timestamp(self):
