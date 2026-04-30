@@ -1,7 +1,7 @@
 import enum
 from config.db import Base
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, String, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -25,9 +25,6 @@ class Room(Base):
     )
     room_metadata = relationship(
         "RoomMetadata", back_populates="room", cascade="all, delete-orphan"
-    )
-    messages = relationship(
-        "Messages", back_populates="room", cascade="all, delete-orphan"
     )
     room_summaries = relationship(
         "RoomSummaries", back_populates="room", cascade="all, delete-orphan"
@@ -148,9 +145,6 @@ class RoomMetadata(Base):
     room_id = Column(
         UUID(as_uuid=True), ForeignKey("rooms.id", ondelete="CASCADE"), nullable=False
     )
-    total_tokens = Column(Integer , nullable=False , default=0)
-    last_summary_tokens = Column(Integer , nullable=False , default=0)
-    last_summarized_message_id = Column(String , nullable=True)
     custom_instructions = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
     room = relationship("Room", back_populates="room_metadata")
@@ -159,8 +153,6 @@ class RoomMetadata(Base):
         return {
             "id": str(self.id),
             "room_id": str(self.room_id),
-            "total_tokens": self.total_tokens,
-            "last_summary_tokens": self.last_summary_tokens,
             "custom_instructions": self.custom_instructions,
             "created_at": str(self.created_at)
         }

@@ -35,4 +35,5 @@ also will return a summary of the previous conversation going on in the room.
 - `push_message(user_content, assistant_content)` — push both turns as a pair to the room
 - `pull_messages(limit=20, offset=0, after_id=None)` — fetch messages with pagination; use after_id for summary generation
 - `submit_summary(content, from_message_id, to_message_id)` — generate and submit a summary of messages between from_message_id and to_message_id
+
 <!-- backrooms-end -->

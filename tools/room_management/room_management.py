@@ -108,14 +108,17 @@ class RoomManagement(BackroomsBase):
             )
 
             room_name = room_data.get("room").get("name")
-            summary = room_data.get("summary")
+            summaries = room_data.get("summaries", [])
 
             logger.info(f"Joined room '{room_name}'.")
 
-            if summary:
-                return f"Joined room '{room_name}'.\n\nLast summary:\n{summary}"
+            if summaries:
+                parts = "\n\n---\n\n".join(
+                    f"[{s['created_at']}]\n{s['summary']}" for s in summaries
+                )
+                return f"Joined room '{room_name}'.\n\nRecent summaries:\n\n{parts}"
             else:
-                return f"Joined room '{room_name}'. No summary yet — call pull_messages to load recent history."
+                return f"Joined room '{room_name}'. No summaries yet."
         except Exception as e:
             logger.error(f"Error joining room: {str(e)}")
             return f"FAILED to join room: {str(e)}"
