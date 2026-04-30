@@ -17,8 +17,6 @@ class Room(Base):
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now)
     last_active = Column(DateTime, default=datetime.now)
-    invite_version = Column(Integer, nullable=False, default=1)
-    agenda = Column(String, nullable=True)
 
     members = relationship(
         "RoomMember", back_populates="room", cascade="all, delete-orphan"
@@ -44,9 +42,6 @@ class Room(Base):
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "last_active": self.last_active,
-            "invite_version": int(self.invite_version),
-            "agenda": self.agenda,
-
         }
 
     def update_timestamp(self):
@@ -159,6 +154,7 @@ class RoomMetadata(Base):
     last_summary_tokens = Column(Integer , nullable=False , default=0)
     last_summarized_message_id = Column(String , nullable=True)
     custom_instructions = Column(String, nullable=True)
+    invite_version = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime, default=datetime.now)
     room = relationship("Room", back_populates="room_metadata")
 
@@ -169,6 +165,6 @@ class RoomMetadata(Base):
             "total_tokens": self.total_tokens,
             "last_summary_tokens": self.last_summary_tokens,
             "custom_instructions": self.custom_instructions,
+            "invite_version": int(self.invite_version),
             "created_at": str(self.created_at)
         }
-

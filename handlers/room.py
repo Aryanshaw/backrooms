@@ -1,8 +1,9 @@
+import os
 from datetime import datetime
 from typing import Optional
 import uuid
 from config.logger import get_logger
-from models.rooms import Room, RoomActivity, RoomActivityTypes, RoomMember
+from models.rooms import Room, RoomActivity, RoomActivityTypes, RoomMember, RoomMetadata
 from models.message import RoomSummaries
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -39,6 +40,10 @@ class RoomHandler:
                     activity_log=f"[ROOM CREATED]-> new room of id: {room_id}, name: {room.name} was created",
                 )
                 session.add(room_activity)
+
+                # create a new metadata row for the room
+                room_metadata = RoomMetadata(id=str(uuid.uuid4()), room_id=room_id, invite_version=1,)
+                session.add(room_metadata)
 
                 await session.commit()
 
@@ -224,13 +229,27 @@ class RoomHandler:
                 if not room:
                     return None
 
-                room.invite_version += 1
+                # fetch existing metadata row; create if missing (though it should exist now)
+                metadata_result = await session.execute(
+                    select(RoomMetadata).where(RoomMetadata.room_id == room_id)
+                )
+                metadata = metadata_result.scalar_one_or_none()
+                
+                if not metadata:
+                    metadata = RoomMetadata(id=str(uuid.uuid4()), room_id=room_id, invite_version=1,)
+                    session.add(metadata)
+                
+                metadata.invite_version += 1
                 room.updated_at = datetime.now()
                 room.last_active = datetime.now()
                 await session.commit()
                 await session.refresh(room)
+                await session.refresh(metadata)
 
-                return room.to_dict()
+                return {
+                    "id": str(room.id),
+                    "invite_version": metadata.invite_version
+                }
         except Exception as e:
             logger.error(f"Failed to bump invite version: {str(e)}")
             raise Exception from e
@@ -281,4 +300,26 @@ class RoomHandler:
             return True
         except Exception as e:
             logger.error(f"Failed to log room activity: {str(e)}")
+            raise Exception from e
+
+    async def generate_invite(self, room_id: str, user_id: str) -> Optional[str]:
+        """Bump version, log activity, and return signed token."""
+        try:
+            bump_data = await self.bump_invite_version(room_id, user_id)
+            if not bump_data:
+                return None
+
+            invite_secret = os.getenv("BACKROOMS_INVITE_SECRET")
+            if not invite_secret:
+                raise Exception("BACKROOMS_INVITE_SECRET is not set in environment.")
+
+            from tools.room_management.utils.invite_tokens import sign_invite_token
+            token = sign_invite_token(secret=invite_secret, room_id=str(bump_data.get("id")), version=bump_data.get("invite_version"))
+            
+            activity_log = f"[INVITE GENERATED]-> user_id: {user_id} generated invite for room_id: {room_id} version: {bump_data.get('invite_version')}"
+            await self.log_room_activity(room_id, user_id, RoomActivityTypes.INVITE_CREATED.value, activity_log)
+            
+            return token
+        except Exception as e:
+            logger.error(f"Failed to generate invite: {str(e)}")
             raise Exception from e
