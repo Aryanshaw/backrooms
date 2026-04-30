@@ -41,6 +41,6 @@ MCP server: http://127.0.0.1:8000/mcp/
 
 **Summaries**
 - `submit_summary(content)` — persist a session summary to the room
-- `pull_summaries(limit=10, offset=0)` — fetch past summaries with pagination
+- `pull_summaries(page=1)` — fetch past summaries, 10 per page
 
 <!-- backrooms-end -->"""
