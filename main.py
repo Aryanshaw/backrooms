@@ -46,17 +46,15 @@ async def room_status(room_id: str = Query(..., description="Room UUID")):
         raise HTTPException(status_code=503, detail="Database not ready")
 
     async with _db.session() as session:
-        room_result = await session.execute(
-            select(Room.name).where(Room.id == room_id)
-        )
+        room_result = await session.execute(select(Room.name).where(Room.id == room_id))
         room_name = room_result.scalar_one_or_none()
         if not room_name:
             raise HTTPException(status_code=404, detail="Room not found")
 
         count_result = await session.execute(
-            select(func.count()).select_from(RoomSummaries).where(
-                RoomSummaries.room_id == room_id
-            )
+            select(func.count())
+            .select_from(RoomSummaries)
+            .where(RoomSummaries.room_id == room_id)
         )
         summary_count = count_result.scalar()
 
@@ -64,4 +62,4 @@ async def room_status(room_id: str = Query(..., description="Room UUID")):
 
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=80, reload=True)
+    uvicorn.run("main:app", host="127.0.0.1", port=8080, reload=True)
