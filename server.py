@@ -35,21 +35,31 @@ def backrooms_guide() -> str:
     # Backrooms — Shared Memory Layer for AI Tools
 
     ## What it is
-    Backrooms gives AI tools persistent, cross-session memory via rooms. With this claude code / codex / cursor agents will be able to share context across sessions.
+    Backrooms gives AI tools persistent, cross-session memory via rooms.
+    Agents across Claude Code, Cursor, Codex share context via summaries stored per room.
     Each project directory anchors to a room via .backroom.json.
 
-    ## Tools
-    Room Management Tools:
-        - init_room(name) — create a new room for this directory
-        - join_room(room_id: Optional) — join or switch to a room  
-        - get_current_room(room_id: Optional) — check active room and members
-        - list_rooms() — see all your rooms
-        - exit_room() — leave the current room
+    ## Session Start
+    1. If .backroom.json exists — call join_room immediately (returns last 3 summaries)
+    2. If not — call list_rooms, then init_room(name) or join_room(room_id)
+    3. Call get_current_room to confirm active room
 
-    ## Rules
-    - If .backroom.json exists in cwd, ALWAYS call join_room at session start
-    - If starting a fresh project, call init_room first
-    - Call get_current_room to confirm context before starting work
+    ## During Session
+    - Call submit_summary(content) when context is long, at session end, or before switching tools
+    - Call pull_summaries() if you need more history than join_room returned
+
+    ## Tools
+    Room Management:
+        - init_room(name) — create new room, writes .backroom.json
+        - join_room(room_id?) — join room, returns last 3 summaries
+        - get_current_room(room_id?) — check active room and members
+        - list_rooms() — see all your rooms
+        - exit_room() — leave current room
+        - setup_agents_md() — write AGENTS.md and CLAUDE.md with Backrooms rules
+
+    Summaries:
+        - submit_summary(content) — persist session summary to room
+        - pull_summaries(limit, offset) — fetch past summaries with pagination
     """
 
 

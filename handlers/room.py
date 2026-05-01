@@ -78,17 +78,17 @@ class RoomHandler:
                         "members": [],
                         "activities": [],
                         "room": None,
-                        "summary": None,
+                        "summaries": [],
                     }
 
-                # fetch latest summary for this room if one exists
-                summary_result = await session.execute(
+                # fetch last 3 summaries in chronological order for join_room context
+                summaries_result = await session.execute(
                     select(RoomSummaries)
                     .where(RoomSummaries.room_id == room_id)
                     .order_by(RoomSummaries.created_at.desc())
-                    .limit(1)
+                    .limit(3)
                 )
-                latest_summary = summary_result.scalar_one_or_none()
+                summaries = list(reversed(summaries_result.scalars().all()))
 
                 has_access = room.owner_id == user_id or any(
                     member.user_id == user_id and member.is_active for member in room.members
@@ -108,7 +108,7 @@ class RoomHandler:
                     "members": room.get_members(active_only=True),
                     "activities": room.get_activities(),
                     "room": room.to_dict(),
-                    "summary": latest_summary.summary if latest_summary else None,
+                    "summaries": [s.to_dict() for s in summaries],
                 }
 
         except Exception as e:
