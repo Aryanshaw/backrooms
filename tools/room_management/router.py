@@ -29,7 +29,7 @@ async def init_room(name: str, ctx: Context) -> str:
     return await room_management.init_room(name)
 
 @room_management_router.tool()
-async def join_room(room_id: Optional[str] = None, ctx: Context = None) -> str:
+async def join_room(room_id: Optional[str] = None, token: Optional[str] = None, ctx: Context = None) -> str:
     """
     ALWAYS call this at the start of every session if .backroom.json exists in cwd.
     Joins this agent to the specified room and updates .backroom.json.
@@ -39,6 +39,9 @@ async def join_room(room_id: Optional[str] = None, ctx: Context = None) -> str:
 
     INPUT:
     - room_id (Optional[str]): room_id to join
+        - if not provided, read .backroom.json from cwd and get the room_id
+        - if provided, use the provided room_id
+    - token (Optional[str]): invite token to validate and join with
         - if not provided, the tool will read .backroom.json from cwd and get the room_id and join the room with the room_id in the .backroom.json
         - if provided, the tool will let the agent join the room with the provided room_id
 
@@ -46,7 +49,7 @@ async def join_room(room_id: Optional[str] = None, ctx: Context = None) -> str:
     text response denoting the success/failure status
     """
     room_management = RoomManagement(ctx)
-    return await room_management.join_room(room_id)
+    return await room_management.join_room(room_id=room_id, token=token)
 
 @room_management_router.tool()
 async def get_current_room(room_id: Optional[str] = None, ctx: Context = None) -> str:

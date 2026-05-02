@@ -15,6 +15,8 @@ from config.db import connect_db
 from config.logger import get_logger
 from models.message import RoomSummaries
 from models.rooms import Room
+from routes.rooms import router as rooms_router
+
 
 logger = get_logger(__name__)
 
@@ -33,6 +35,9 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+app.include_router(rooms_router)
+
 
 
 @app.get("/room-status")
@@ -60,6 +65,12 @@ async def room_status(room_id: str = Query(..., description="Room UUID")):
 
     return {"room_name": room_name, "summary_count": summary_count}
 
+@app.get("/health")
+async def health() -> dict:
+    return {"status": "ok"}
+
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8080, reload=True)
+"""FastAPI dashboard HTTP API."""
+

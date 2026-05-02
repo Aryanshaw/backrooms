@@ -1,3 +1,3 @@
-from .room import RoomHanler
+from .room import RoomHandler
 
-__all__ = ["RoomHanler"]
+__all__ = ["RoomHandler"]

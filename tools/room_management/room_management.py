@@ -4,9 +4,11 @@ from config.logger import get_logger
 from pathlib import Path
 from datetime import datetime
 import json
+import os
 
-from handlers.room import RoomHanler
+from handlers.room import RoomHandler
 from models.rooms import RoomActivityTypes
+from tools.room_management.utils import decode_invite_token
 from prompt import BACKROOMS_MARKER_START , BACKROOMS_MARKER_END , BACKROOMS_SECTION
 from tools.base import BackroomsBase
 
@@ -16,8 +18,9 @@ logger = get_logger(__name__)
 
 class RoomManagement(BackroomsBase):
     def __init__(self, ctx: Context):
+        """Bind request context, current user identity, and room handler access."""
         super().__init__(ctx)
-        self.room_handler = RoomHanler(self.db)
+        self.room_handler = RoomHandler(self.db)
 
     async def init_room(self, name: str) -> str:
         """
@@ -58,9 +61,9 @@ class RoomManagement(BackroomsBase):
             logger.error(f"Error initializing room: {str(e)} after joining")
             return f"FAILED to initialize room: {str(e)} after joining"
     
-    async def join_room(self, room_id: Optional[str] = None) -> str:
+    async def join_room(self, room_id: Optional[str] = None, token: Optional[str] = None) -> str:
         """
-        - Accept room_id as parameter
+        - Accept room_id or invite token as parameter
         - Query DB — if room doesn't exist, return error
         - Upsert into room_members with user_id, room_id, joined_at
         - Update last_active on the room row
@@ -69,22 +72,44 @@ class RoomManagement(BackroomsBase):
         - Return room name + confirmation
         """
         try:
+            if room_id and token:
+                return "FAILED: provide either room_id or token, not both"
+
             config_path = self._config_path()
             config_data = {}
             if config_path.exists():
                 config_data = self._read_config()
 
-            if not room_id:
+            if token:
+                invite_secret = os.getenv("BACKROOMS_INVITE_SECRET")
+                if not invite_secret:
+                    return "FAILED: BACKROOMS_INVITE_SECRET is not set in environment"
+                try:
+                    invite_payload = decode_invite_token(invite_secret, token)
+                except ValueError as exc:
+                    if str(exc) == "expired":
+                        return "FAILED: invite token expired"
+                    return "FAILED: invite token invalid"
+
+                room_id = invite_payload["room_id"]
+                room_data = await self.room_handler.get_room_by_id(room_id)
+                if not room_data or not room_data.get("room"):
+                    return "FAILED: room not found"
+                if invite_payload["version"] != room_data.get("room").get("invite_version"):
+                    return "FAILED: invite token invalid"
+            elif not room_id:
                 if not config_path.exists():
                     return "FAILED: .backroom.json not found"
                 room_id = config_data.get("id")
                 if not room_id:
                     return "FAILED: room_id not found in .backroom.json"
-
-            # check if the room exists in the database for the user
-            room_data = await self.room_handler.get_room(room_id, self.user_id)
-            if not room_data or not room_data.get("room"):
-                return "FAILED: room not found for this user"
+                room_data = await self.room_handler.get_room(room_id, self.user_id)
+                if not room_data or not room_data.get("room"):
+                    return "FAILED: room not found for this user"
+            else:
+                room_data = await self.room_handler.get_room(room_id, self.user_id)
+                if not room_data or not room_data.get("room"):
+                    return "FAILED: room not found for this user"
 
             # upsert into room_members with user_id, room_id, joined_at
             joined = await self.room_handler.join_room(room_id, self.user_id)
@@ -98,12 +123,12 @@ class RoomManagement(BackroomsBase):
             config_data.setdefault("created_at", datetime.now().isoformat())
             self._write_config(config_data)
 
-            # log member_joined to room_activity
-            activity_log = f"[MEMBER JOINED]-> user_id: {self.user_id} joined room_id: {room_id}"
+            activity_label = "INVITE ACCEPTED" if token else "MEMBER JOINED"
+            activity_log = f"[{activity_label}]-> user_id: {self.user_id} joined room_id: {room_id}"
             await self.room_handler.log_room_activity(
                 room_id,
                 self.user_id,
-                RoomActivityTypes.MEMBER_JOINED.value,
+                RoomActivityTypes.INVITE_ACCEPTED.value if token else RoomActivityTypes.MEMBER_JOINED.value,
                 activity_log,
             )
 
@@ -124,6 +149,7 @@ class RoomManagement(BackroomsBase):
             return f"FAILED to join room: {str(e)}"
 
     async def exit_room(self) -> str:
+        """Leave the current room and remove the local directory link."""
         try:
             config_path = self._config_path()
             if not config_path.exists():

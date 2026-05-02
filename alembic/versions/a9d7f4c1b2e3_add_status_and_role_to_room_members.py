@@ -1,4 +1,4 @@
-"""add status and role to room members
+"""add status, role, and invite version support
 
 Revision ID: a9d7f4c1b2e3
 Revises: 8d311336cf54
@@ -19,13 +19,23 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "room_members",
-        sa.Column("status", sa.String(), nullable=False, server_default="active"),
+    op.execute(
+        """
+        ALTER TABLE rooms
+        ADD COLUMN IF NOT EXISTS invite_version INTEGER NOT NULL DEFAULT 1
+        """
     )
-    op.add_column(
-        "room_members",
-        sa.Column("role", sa.String(), nullable=False, server_default="member"),
+    op.execute(
+        """
+        ALTER TABLE room_members
+        ADD COLUMN IF NOT EXISTS status VARCHAR NOT NULL DEFAULT 'active'
+        """
+    )
+    op.execute(
+        """
+        ALTER TABLE room_members
+        ADD COLUMN IF NOT EXISTS role VARCHAR NOT NULL DEFAULT 'member'
+        """
     )
 
     op.execute(
@@ -40,10 +50,48 @@ def upgrade() -> None:
         """
     )
 
-    op.alter_column("room_members", "status", server_default=None)
-    op.alter_column("room_members", "role", server_default=None)
+    op.execute(
+        """
+        ALTER TABLE rooms
+        ALTER COLUMN invite_version DROP DEFAULT
+        """
+    )
+    op.execute(
+        """
+        ALTER TABLE room_members
+        ALTER COLUMN status DROP DEFAULT
+        """
+    )
+    op.execute(
+        """
+        ALTER TABLE room_members
+        ALTER COLUMN role DROP DEFAULT
+        """
+    )
+    op.create_unique_constraint(
+        "uix_room_member_user",
+        "room_members",
+        ["room_id", "user_id"],
+    )
 
 
 def downgrade() -> None:
-    op.drop_column("room_members", "role")
-    op.drop_column("room_members", "status")
+    op.drop_constraint("uix_room_member_user", "room_members", type_="unique")
+    op.execute(
+        """
+        ALTER TABLE rooms
+        DROP COLUMN IF EXISTS invite_version
+        """
+    )
+    op.execute(
+        """
+        ALTER TABLE room_members
+        DROP COLUMN IF EXISTS role
+        """
+    )
+    op.execute(
+        """
+        ALTER TABLE room_members
+        DROP COLUMN IF EXISTS status
+        """
+    )

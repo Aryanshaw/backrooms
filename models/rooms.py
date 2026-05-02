@@ -1,7 +1,7 @@
 import enum
 from config.db import Base
 
-from sqlalchemy import Column, String, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, String, DateTime, ForeignKey, UniqueConstraint, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -17,6 +17,7 @@ class Room(Base):
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now)
     last_active = Column(DateTime, default=datetime.now)
+
     members = relationship(
         "RoomMember", back_populates="room", cascade="all, delete-orphan"
     )
@@ -56,6 +57,7 @@ class Room(Base):
 
 class RoomMember(Base):
     __tablename__ = "room_members"
+    __table_args__ = (UniqueConstraint("room_id", "user_id", name="uix_room_member_user"),)
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     room_id = Column(
         UUID(as_uuid=True), ForeignKey("rooms.id", ondelete="CASCADE"), nullable=False
@@ -146,6 +148,7 @@ class RoomMetadata(Base):
         UUID(as_uuid=True), ForeignKey("rooms.id", ondelete="CASCADE"), nullable=False
     )
     custom_instructions = Column(String, nullable=True)
+    invite_version = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime, default=datetime.now)
     room = relationship("Room", back_populates="room_metadata")
 
@@ -154,6 +157,6 @@ class RoomMetadata(Base):
             "id": str(self.id),
             "room_id": str(self.room_id),
             "custom_instructions": self.custom_instructions,
+            "invite_version": int(self.invite_version),
             "created_at": str(self.created_at)
         }
-
